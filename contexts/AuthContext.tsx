@@ -47,28 +47,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     .single();
 
                 setProfile(profileData);
-            } else {
-                // FALLBACK: Check localStorage for legacy login (Initial Load)
-                const savedUser = localStorage.getItem('currentUser');
-                if (savedUser) {
-                    try {
-                        const parsed = JSON.parse(savedUser);
-                        setUser({ id: parsed.id, email: parsed.email });
-                        const { data: profileData } = await supabase
-                            .from('profiles')
-                            .select('*')
-                            .eq('id', parsed.id)
-                            .single();
-
-                        if (profileData) {
-                            setProfile(profileData);
-                        } else {
-                            setProfile(parsed);
-                        }
-                    } catch (e) {
-                        // ignore
-                    }
-                }
             }
 
             setLoading(false);
@@ -83,33 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         .single();
                     setProfile(profileData);
                 } else {
-                    // FALLBACK: Check localStorage for legacy login
-                    const savedUser = localStorage.getItem('currentUser');
-                    if (savedUser) {
-                        try {
-                            const parsed = JSON.parse(savedUser);
-                            setUser({ id: parsed.id, email: parsed.email }); // Mock Supabase user object
-                            // Profile might be incomplete in localStorage, so we fetch it again or use what we have
-                            // Ideally fetch fresh profile from DB using ID
-                            const { data: profileData } = await supabase
-                                .from('profiles')
-                                .select('*')
-                                .eq('id', parsed.id)
-                                .single();
-
-                            if (profileData) {
-                                setProfile(profileData);
-                            } else {
-                                // If fetch fails, use local storage data as profile
-                                setProfile(parsed);
-                            }
-                        } catch (e) {
-                            console.error("AuthContext: Failed to parse local user");
-                            setProfile(null);
-                        }
-                    } else {
-                        setProfile(null);
-                    }
+                    setProfile(null);
                 }
             });
 

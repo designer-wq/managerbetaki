@@ -16,41 +16,43 @@ const LoginPage = () => {
         setLoading(true);
 
         try {
-            // Fetch user by email
-            const user = await fetchByColumn('profiles', 'email', email);
+            const { getSupabase } = await import('../lib/supabase');
+            const supabase = getSupabase();
 
-            if (!user) {
-                setError('Email ou senha inválidos.'); // Generic error for security
+            if (!supabase) {
+                setError('Erro de configuração: Supabase não inicializado.');
                 setLoading(false);
                 return;
             }
 
-            // Verify password (plaintext for MVP as requested)
-            if (user.password !== password) {
+            const { data, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+
+            if (authError) {
                 setError('Email ou senha inválidos.');
                 setLoading(false);
                 return;
             }
 
-            if (user.status !== 'active') {
-                setError('Esta conta está inativa. Contate o administrador.');
-                setLoading(false);
-                return;
+            if (data.user) {
+                // Check if profile is active
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('status')
+                    .eq('id', data.user.id)
+                    .single();
+
+                if (profile && profile.status !== 'active') {
+                    await supabase.auth.signOut();
+                    setError('Esta conta está inativa. Contate o administrador.');
+                    setLoading(false);
+                    return;
+                }
+
+                navigate('/');
             }
-
-            // Login successful
-            localStorage.setItem('currentUser', JSON.stringify({
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                avatar_url: user.avatar_url
-            }));
-
-            // Force reload or just navigate (navigate is cleaner, but need to ensure App context updates if existing)
-            // For now assuming simple local storage check on protected routes or header
-            navigate('/');
-
         } catch (err) {
             console.error(err);
             setError('Ocorreu um erro ao tentar fazer login.');
