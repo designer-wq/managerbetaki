@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manger Mkt Bet Aki</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700&family=Spline+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#bcd200",
+            "primary-hover": "#a4b800",
+            "background-light": "#f6f8f7",
+            "background-dark": "#09090b", // kept as base
+            "surface-dark": "#18181b",
+            "card-dark": "rgba(255,255,255,0.02)", // Updated to requested reduced opacity
+            highlight: "#27272a",
+            "border-dark": "rgba(255,255,255,0.04)", // Updated to requested subtle border
+          },
+          fontFamily: {
+            display: ["Spline Sans", "sans-serif"],
+            body: ["Noto Sans", "sans-serif"],
+          },
+          borderRadius: {
+            none: "0",
+            xs: "6px",
+            sm: "8px",
+            DEFAULT: "10px", // md
+            md: "10px",
+            lg: "12px",
+            xl: "16px", // fallback just in case
+            full: "9999px",
+            pill: "999px",
+          },
+          boxShadow: {
+            'sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            'card': '0 1px 0 rgba(255,255,255,0.03), 0 6px 20px rgba(0,0,0,0.35)',
+            'card-hover': '0 1px 0 rgba(255,255,255,0.04), 0 10px 30px rgba(0,0,0,0.45)',
+          }
+        },
+      },
+    };
+  </script>
+  <style>
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #18181b;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #3f3f46;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #bcd200;
+    }
+
+    /* Global Card Standard */
+    .card-enterprise {
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 6px 20px rgba(0, 0, 0, 0.35);
+      transition: all 0.2s ease-in-out;
+    }
+
+    .card-enterprise:hover {
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.45);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* 1. Card Hierarchy */
+    .card-primary {
+      background: rgba(255, 255, 255, 0.035);
+      /* Slightly lighter */
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      /* Stronger border */
+    }
+
+    .card-secondary {
+      background: rgba(255, 255, 255, 0.02);
+      /* Standard */
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .card-neutral {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+      /* Very subtle */
+      box-shadow: none;
+    }
+
+    /* 2. Contrast Utilities */
+    .text-contrast-title {
+      opacity: 0.7;
+    }
+
+    .text-contrast-sub {
+      opacity: 0.55;
+    }
+
+    .text-contrast-value {
+      opacity: 1;
+    }
+
+    /* 3. Table Enhancements */
+    .table-zebra tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .table-hover tr:hover {
+      background: rgba(255, 255, 255, 0.035);
+      cursor: pointer;
+    }
+
+    .table-content-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #fff;
+    }
+
+    .table-content-id {
+      font-size: 0.75rem;
+      color: #71717a;
+      opacity: 0.7;
+    }
+
+    /* Inputs/Filters radius-xs */
+    input,
+    select,
+    textarea,
+    .filter-container {
+      border-radius: 6px !important;
+    }
+
+    /* Modals radius-lg */
+    .modal-content {
+      border-radius: 12px !important;
+    }
+  </style>
+
+  <link rel="stylesheet" href="/index.css">
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1",
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/managerbetaki/assets/index-D-tIHKEi.js"></script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white font-display overflow-hidden">
+  <div id="root"></div>
+</body>
+
+</html>
