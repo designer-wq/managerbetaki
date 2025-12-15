@@ -16,9 +16,26 @@ const CreateUserPage = () => {
 
   const loadUsers = async () => {
     setLoading(true);
-    const data = await fetchProfiles();
-    setUsers(data || []);
-    setLoading(false);
+    try {
+      const { getSupabase } = await import('../lib/supabase');
+      const supabase = getSupabase();
+
+      const { data, error } = await (supabase as any).rpc('get_auth_users_list');
+
+      if (error) throw error;
+
+      // Map the RPC result to match the expected shape (nested job_titles)
+      const mappedUsers = (data || []).map((u: any) => ({
+        ...u,
+        job_titles: u.job_title_name ? { name: u.job_title_name } : null
+      }));
+
+      setUsers(mappedUsers);
+    } catch (err) {
+      console.error("Error fetching users from Auth:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

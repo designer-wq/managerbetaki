@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Layers, Tag, CheckCircle, Pencil, Check, X, Briefcase, Upload } from 'lucide-react';
 import { fetchTable, createRecord, updateRecord, deleteRecord } from '../../lib/api';
 import { getSupabase } from '../../lib/supabase';
+import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
 
 // Interfaces matching DB Schema
 interface Origin {
@@ -26,6 +27,8 @@ interface JobTitle {
     name: string;
 }
 
+
+
 const GeneralSettings = () => {
     // --- Data State ---
     const [origins, setOrigins] = useState<Origin[]>([]);
@@ -48,34 +51,70 @@ const GeneralSettings = () => {
     const [editingType, setEditingType] = useState<'origin' | 'type' | 'status' | 'job_title' | null>(null);
 
     // --- Fetch Data ---
+    const loadData = async () => {
+        setLoading(true);
+        const originsData = await fetchTable('origins');
+        const typesData = await fetchTable('demand_types');
+        const statusesData = await fetchTable('statuses');
+        const jobTitlesData = await fetchTable('job_titles');
+        const settingsData = await fetchTable('app_config');
+        setOrigins(originsData || []);
+        setDemandTypes(typesData || []);
+        setStatuses(statusesData || []);
+        setJobTitles(jobTitlesData || []);
+
+        const logoConfig = settingsData?.find((c: any) => c.key === 'app_logo');
+        if (logoConfig && logoConfig.value) {
+            setAppLogo(logoConfig.value);
+        }
+
+        setLoading(false);
+    };
 
 
     useEffect(() => {
         loadData();
     }, []);
 
+    useRealtimeSubscription(['origins', 'demand_types', 'statuses', 'job_titles', 'app_config'], loadData);
+
     // --- Handlers ---
     const handleAddOrigin = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newOrigin.trim()) return;
-        await createRecord('origins', { name: newOrigin });
-        setNewOrigin('');
-        loadData();
+        try {
+            await createRecord('origins', { name: newOrigin });
+            setNewOrigin('');
+            loadData();
+        } catch (error) {
+            console.error('Error adding origin:', error);
+            alert('Erro ao criar origem. Verifique se o script de correção do banco foi executado.');
+        }
     };
 
     const handleDeleteOrigin = async (id: string) => {
         if (confirm('Tem certeza que deseja excluir esta origem?')) {
-            await deleteRecord('origins', id);
-            loadData();
+            try {
+                await deleteRecord('origins', id);
+                loadData();
+            } catch (error) {
+                console.error('Error deleting origin:', error);
+                alert('Erro ao excluir origem.');
+            }
         }
     };
 
     const handleAddType = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newType.trim()) return;
-        await createRecord('demand_types', { name: newType });
-        setNewType('');
-        loadData();
+        try {
+            await createRecord('demand_types', { name: newType });
+            setNewType('');
+            loadData();
+        } catch (error) {
+            console.error('Error adding type:', error);
+            alert('Erro ao criar tipo. Execute o script de correção do banco.');
+        }
     };
 
     const handleDeleteType = async (id: string) => {
@@ -88,9 +127,14 @@ const GeneralSettings = () => {
     const handleAddStatus = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newStatus.trim()) return;
-        await createRecord('statuses', { name: newStatus, color: newStatusColor });
-        setNewStatus('');
-        loadData();
+        try {
+            await createRecord('statuses', { name: newStatus, color: newStatusColor });
+            setNewStatus('');
+            loadData();
+        } catch (error) {
+            console.error('Error adding status:', error);
+            alert('Erro ao criar status. Execute o script de correção do banco.');
+        }
     };
 
     const handleDeleteStatus = async (id: string) => {
@@ -115,6 +159,8 @@ const GeneralSettings = () => {
         }
     };
 
+
+
     // --- App Config State ---
     const [appLogo, setAppLogo] = useState('');
     const [isSavingLogo, setIsSavingLogo] = useState(false);
@@ -128,25 +174,7 @@ const GeneralSettings = () => {
     };
 
     // --- Fetch Data ---
-    const loadData = async () => {
-        setLoading(true);
-        const [originsData, typesData, statusesData, jobsData, appConfig] = await Promise.all([
-            fetchTable('origins'),
-            fetchTable('demand_types'),
-            fetchTable('statuses'),
-            fetchTable('job_titles'),
-            fetchTable('app_config')
-        ]);
-        setOrigins(originsData || []);
-        setDemandTypes(typesData || []);
-        setStatuses(statusesData || []);
-        setJobTitles(jobsData || []);
 
-        const logoConfig = appConfig?.find((c: any) => c.key === 'app_logo');
-        if (logoConfig) setAppLogo(logoConfig.value);
-
-        setLoading(false);
-    };
 
     const handleSaveLogo = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -173,7 +201,7 @@ const GeneralSettings = () => {
         } finally {
             setIsSavingLogo(false);
         }
-    }
+    };
 
     // --- File Upload ---
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -534,6 +562,8 @@ const GeneralSettings = () => {
                     </div>
                 </div>
             </div>
+
+
 
         </div>
     );

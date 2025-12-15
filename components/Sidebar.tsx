@@ -11,31 +11,27 @@ import {
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionsContext';
+import { useAuth } from '../contexts/AuthContext';
+import { getSupabase } from '../lib/supabase';
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
-  const [appLogo, setAppLogo] = useState('https://picsum.photos/100/100?random=1');
+  const { user: authUser, profile } = useAuth();
+  const [appLogo, setAppLogo] = useState('/logo.png');
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error("Invalid user data");
-      }
-    }
-  }, []);
+  // Unified user object for UI
+  const user = profile || (authUser ? {
+    name: authUser.email?.split('@')[0] || 'User',
+    role: 'User',
+    avatar_url: authUser.user_metadata?.avatar_url,
+    email: authUser.email
+  } : null);
 
   // Fetch App Logo
   useEffect(() => {
     const fetchLogo = async () => {
       try {
-        // We import fetchTable dynamically or need to move it to api.ts if not available.
-        // Assuming fetchTable is available or we use direct supabase client.
-        // Let's allow Sidebar to use api.ts
         const { fetchTable } = await import('../lib/api');
         const config = await fetchTable('app_config');
         const logo = config?.find((c: any) => c.key === 'app_logo');
@@ -49,9 +45,10 @@ const Sidebar = () => {
     fetchLogo();
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (confirm('Deseja realmente sair?')) {
-      localStorage.removeItem('currentUser');
+      const supabase = getSupabase();
+      if (supabase) await supabase.auth.signOut();
       navigate('/login');
     }
   };
@@ -61,7 +58,7 @@ const Sidebar = () => {
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/', id: 'dashboard' },
     { icon: ListTodo, label: 'Demandas', path: '/demands', id: 'demands' },
-    { icon: Users, label: 'Equipe', path: '/users', id: 'team' }, // Mapped 'users' path to 'team' module usually, or 'users'? The matrix in PermissionSettings says 'team' (Equipe).
+    { icon: Users, label: 'Equipe', path: '/users', id: 'team' },
     { icon: BarChart3, label: 'Relatórios', path: '/reports', id: 'reports' },
     { icon: Database, label: 'Cadastros', path: '/registers', id: 'registers' },
     { icon: Settings, label: 'Configurações', path: '/config', id: 'config' },
@@ -85,8 +82,6 @@ const Sidebar = () => {
 
         <nav className="flex flex-col gap-2">
           {menuItems.map((item) => {
-            // if (!can(item.id, 'view')) return null; // Logic disabled per user request: Menu must appear for all
-
             const isActive = location.pathname === item.path;
 
             return (
@@ -126,7 +121,10 @@ const Sidebar = () => {
             </div>
             <div className="flex flex-col min-w-0">
               <p className="text-white text-sm font-medium leading-none truncate">{user?.name || 'Visitante'}</p>
-              <p className="text-zinc-500 text-xs mt-1 truncate">{user?.role || 'Acesso Restrito'}</p>
+              {/* Fixed: Show Job Title and then Role */}
+              <p className="text-zinc-500 text-xs mt-1 truncate">
+                {user?.job_titles?.name || 'Sem Cargo'} • {user?.role || 'Acesso Restrito'}
+              </p>
             </div>
           </div>
           <button

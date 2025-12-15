@@ -6,7 +6,12 @@ interface UserProfile {
     email: string;
     name: string;
     role: string;
+    permission_level: string;
+    origin?: string;
     avatar_url?: string;
+    job_titles?: {
+        name: string;
+    };
 }
 
 interface AuthContextType {
@@ -40,13 +45,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(session?.user || null);
 
             if (session?.user) {
+                // Fetch extra data (Job Title Name) that might not be in metadata
                 const { data: profileData } = await supabase
                     .from('profiles')
-                    .select('*')
+                    .select('*, job_titles(name)')
                     .eq('id', session.user.id)
                     .single();
 
-                setProfile(profileData);
+                // Merge: Metadata takes precedence for core fields (Source of Truth)
+                const metadata = session.user.user_metadata || {};
+                const pd: any = profileData || {};
+
+                // Safe merge
+                setProfile({
+                    ...(pd),
+                    id: session.user.id,
+                    email: session.user.email || '',
+                    name: metadata.name || pd.name || session.user.email?.split('@')[0] || 'User',
+                    role: metadata.role || pd.role || 'Colaborador',
+                    permission_level: metadata.permission_level || pd.permission_level || '1',
+                    origin: metadata.origin || pd.origin || '',
+                    job_titles: pd.job_titles
+                });
             }
 
             setLoading(false);
@@ -56,10 +76,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (session?.user) {
                     const { data: profileData } = await supabase
                         .from('profiles')
-                        .select('*')
+                        .select('*, job_titles(name)')
                         .eq('id', session.user.id)
                         .single();
-                    setProfile(profileData);
+
+                    const metadata = session.user.user_metadata || {};
+                    const pd: any = profileData || {};
+
+                    setProfile({
+                        ...(pd),
+                        id: session.user.id,
+                        email: session.user.email || '',
+                        name: metadata.name || pd.name || session.user.email?.split('@')[0] || 'User',
+                        role: metadata.role || pd.role || 'Colaborador',
+                        permission_level: metadata.permission_level || pd.permission_level || '1',
+                        origin: metadata.origin || pd.origin || '',
+                        job_titles: pd.job_titles
+                    });
                 } else {
                     setProfile(null);
                 }
@@ -73,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchSession();
     }, []);
 
-    const isAdmin = profile?.role === 'Administrador';
+    const isAdmin = profile?.permission_level === '4';
 
     return (
         <AuthContext.Provider value={{ user, profile, loading, isAdmin }}>

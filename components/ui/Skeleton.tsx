@@ -1,7 +1,9 @@
 
 import React from 'react';
 
-interface SkeletonProps extends React.ComponentProps<'div'> { }
+interface SkeletonProps extends React.ComponentProps<'div'> {
+    className?: string;
+}
 
 function Skeleton({ className, ...props }: SkeletonProps) {
     return (

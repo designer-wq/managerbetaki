@@ -4,7 +4,7 @@ import { fetchTable, upsertRecord } from '../../lib/api';
 
 const PermissionSettings = () => {
     // ... items ...
-    const roles = ['Administrador', 'Gerente', 'Editor', 'Visualizador'];
+    const roles = ['ADMIN', 'GERENTE', 'DESIGNER', 'Visualizador'];
     // ... modules ... (keep logic)
     const modules = [
         { id: 'dashboard', label: 'Dashboard' },
@@ -43,7 +43,7 @@ const PermissionSettings = () => {
                 });
             }
             modules.forEach(mod => {
-                initialPerms['Administrador'][mod.id] = { view: true, edit: true, delete: true };
+                initialPerms['ADMIN'][mod.id] = { view: true, edit: true, delete: true };
             });
             setPermissions(initialPerms);
             setLoading(false);
@@ -160,9 +160,9 @@ const PermissionSettings = () => {
                                                             className="sr-only peer"
                                                             checked={perm.view}
                                                             onChange={() => handleToggle(role, mod.id, 'view')}
-                                                            disabled={role === 'Administrador'} // Admin always full access
+                                                            disabled={role === 'ADMIN'} // Admin always full access
                                                         />
-                                                        <div className={`w-9 h-5 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${role === 'Administrador' ? 'opacity-50 cursor-not-allowed bg-green-500' : 'bg-zinc-700 peer-checked:bg-green-500'}`}></div>
+                                                        <div className={`w-9 h-5 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${role === 'ADMIN' ? 'opacity-50 cursor-not-allowed bg-green-500' : 'bg-zinc-700 peer-checked:bg-green-500'}`}></div>
                                                     </label>
 
                                                     {/* Edit Checkbox */}
@@ -173,9 +173,9 @@ const PermissionSettings = () => {
                                                             className="sr-only peer"
                                                             checked={perm.edit}
                                                             onChange={() => handleToggle(role, mod.id, 'edit')}
-                                                            disabled={role === 'Administrador'}
+                                                            disabled={role === 'ADMIN'}
                                                         />
-                                                        <div className={`w-9 h-5 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${role === 'Administrador' ? 'opacity-50 cursor-not-allowed bg-indigo-500' : 'bg-zinc-700 peer-checked:bg-indigo-500'}`}></div>
+                                                        <div className={`w-9 h-5 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${role === 'ADMIN' ? 'opacity-50 cursor-not-allowed bg-indigo-500' : 'bg-zinc-700 peer-checked:bg-indigo-500'}`}></div>
                                                     </label>
 
                                                     {/* Delete Checkbox */}
@@ -186,9 +186,9 @@ const PermissionSettings = () => {
                                                             className="sr-only peer"
                                                             checked={perm.delete}
                                                             onChange={() => handleToggle(role, mod.id, 'delete')}
-                                                            disabled={role === 'Administrador'}
+                                                            disabled={role === 'ADMIN'}
                                                         />
-                                                        <div className={`w-9 h-5 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${role === 'Administrador' ? 'opacity-50 cursor-not-allowed bg-red-500' : 'bg-zinc-700 peer-checked:bg-red-500'}`}></div>
+                                                        <div className={`w-9 h-5 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${role === 'ADMIN' ? 'opacity-50 cursor-not-allowed bg-red-500' : 'bg-zinc-700 peer-checked:bg-red-500'}`}></div>
                                                     </label>
                                                 </div>
                                             </td>

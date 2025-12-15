@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Info, Grid, Calendar, FileText, Lock, ChevronDown, Link as LinkIcon, Bold, Italic, List, Image as ImageIcon, ArrowRight, Clock, MessageSquare, History, ExternalLink, Send, Flag } from 'lucide-react';
+import { Info, Grid, Calendar, FileText, Lock, ChevronDown, Link as LinkIcon, Bold, Italic, List, Image as ImageIcon, ArrowRight, Clock, MessageSquare, History, ExternalLink, Send, Flag, Check } from 'lucide-react';
 import { fetchTable, createRecord, updateRecord, fetchComments, fetchLogs, upsertRecord } from '../../lib/api';
 import { useToast } from '../../components/ui/ToastContext';
 import { useDemandTimer } from '../../hooks/useDemandTimer';
+
+import { useAuth } from '../../contexts/AuthContext';
 
 interface CreateDemandFormProps {
     onCancel?: () => void;
@@ -19,12 +21,21 @@ interface CustomStatus {
 const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
     initialData = null,
     onCancel,
-    onSuccess,
-    currentUser: propCurrentUser // Rename to avoid conflict with state
+    onSuccess
 }) => {
     const { addToast } = useToast();
+    const { user: authUser, profile } = useAuth();
+
+    // Unified user object
+    const currentUser = profile || (authUser ? {
+        id: authUser.id,
+        name: authUser.email?.split('@')[0] || 'User',
+        role: 'User',
+        avatar_url: authUser.user_metadata?.avatar_url,
+        email: authUser.email
+    } : null);
+
     const isEditMode = !!initialData;
-    const [currentUser, setCurrentUser] = useState<any>(propCurrentUser); // Initialize with prop
 
     // Data State
     const [origins, setOrigins] = useState<any[]>([]);
@@ -53,31 +64,49 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
     const deadlineRef = useRef<HTMLInputElement>(null);
     const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
-    // Load User
-    useEffect(() => {
-        const stored = localStorage.getItem('currentUser');
-        if (stored) {
-            setCurrentUser(JSON.parse(stored));
-        }
-    }, []);
+    // Remove old localStorage effect purely (replaced by useAuth)
 
+    // Fetch Options & Data
     // Fetch Options & Data
     useEffect(() => {
         const loadOptions = async () => {
-            const [o, t, s, p] = await Promise.all([
+            const { getSupabase } = await import('../../lib/supabase');
+            const supabase = getSupabase();
+
+            // Parallel fetch: Standard tables + Auth Users RPC
+            const [o, t, s] = await Promise.all([
                 fetchTable('origins'),
                 fetchTable('demand_types'),
-                fetchTable('statuses'),
-                fetchTable('profiles')
+                fetchTable('statuses')
             ]);
+
+            // User Fetching Strategy: RPC -> Filter by 'Designer' (Case insensitive just in case)
+            let filteredDesigners: any[] = [];
+            try {
+                if (supabase) {
+                    const { data: authUsers, error } = await (supabase as any).rpc('get_auth_users_list');
+                    if (!error && authUsers) {
+                        // Filter: Must be 'active' AND have job_title 'Designer'
+                        filteredDesigners = authUsers.filter((u: any) =>
+                            u.status === 'active' &&
+                            u.job_title_name &&
+                            u.job_title_name.toLowerCase().includes('designer')
+                        );
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching designers:", err);
+            }
+
             setOrigins(o || []);
             setTypes(t || []);
             setStatuses(s || []);
-            setProfiles(p || []);
+            setProfiles(filteredDesigners);
 
             // Set default status if new
             if (!initialData && s && s.length > 0) {
-                const defaultStatus = s.find((st: any) => st.order === 1) || s[0];
+                const backlogStatus = s.find((st: any) => st.name.toLowerCase() === 'backlog');
+                const defaultStatus = backlogStatus || s.find((st: any) => st.order === 1) || s[0];
                 setStatusId(defaultStatus.id);
             }
 
@@ -95,6 +124,9 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
         };
         loadOptions();
     }, [initialData, isEditMode]);
+
+    // Status Menu State
+    const [showStatusMenu, setShowStatusMenu] = useState(false);
 
     // Helper: Get Status Object
     const currentStatus = statuses.find(s => s.id === statusId);
@@ -122,6 +154,7 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
     };
 
     const handleStatusChange = async (newStatusId: string) => {
+        setShowStatusMenu(false); // Close menu
         const oldStatusId = statusId;
         setStatusId(newStatusId); // Update local generic status state
 
@@ -134,13 +167,14 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
         const isNewProduction = newStatusObj?.name.toLowerCase().includes('produção');
         const isOldProduction = oldStatusObj?.name.toLowerCase().includes('produção');
 
-        let updates: any = {};
+        // Always update status
+        let updates: any = { status_id: newStatusId };
         let newTimerState = { ...timerState };
 
         if (!isOldProduction && isNewProduction) {
             // Started Production
             const now = new Date().toISOString();
-            updates = { production_started_at: now };
+            updates.production_started_at = now;
             newTimerState.production_started_at = now;
         }
         else if (isOldProduction && !isNewProduction) {
@@ -150,21 +184,29 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
                 const now = new Date().getTime();
                 const sessionSeconds = Math.max(0, Math.floor((now - start) / 1000));
 
-                updates = {
-                    production_started_at: null,
-                    accumulated_time: (timerState.accumulated_time || 0) + sessionSeconds
-                };
+                updates.production_started_at = null;
+                updates.accumulated_time = (timerState.accumulated_time || 0) + sessionSeconds;
 
                 newTimerState.production_started_at = null;
                 newTimerState.accumulated_time = updates.accumulated_time;
             }
         }
 
-        // If there are timer updates, save immediately
-        if (Object.keys(updates).length > 0) {
-            await updateRecord('demands', initialData.id, updates);
+        // Save immediately
+        try {
+            await updateRecord('demands', initialData.id, updates, currentUser?.id);
             setTimerState(newTimerState);
-            // Optionally notify user nicely? No, silent is better for "auto-save" feel.
+
+            if (isNewProduction) {
+                addToast('Cronômetro iniciado e status salvo', 'success');
+            } else if (isOldProduction) {
+                addToast('Tempo contabilizado e status salvo', 'success');
+            } else {
+                addToast('Status atualizado com sucesso', 'success');
+            }
+        } catch (err) {
+            console.error("Auto-save error:", err);
+            addToast('Erro ao salvar status automático', 'error');
         }
     };
 
@@ -190,26 +232,33 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
 
 
     const handleSubmit = async () => {
+        // 1. Basic Validation
         if (!titleRef.current?.value || !typeRef.current?.value || !deadlineRef.current?.value) {
             alert('Por favor, preencha os campos obrigatórios (Título, Tipo, Prazo).');
             return;
         }
 
-        // Use current timer state for submission
+        if (!statusId) {
+            alert('Status não definido. Aguarde o carregamento ou recarregue a página.');
+            return;
+        }
+
+        // 2. Prepare Payload (Sanitize UUIDs)
         const demandData = {
             title: titleRef.current.value,
             reference_link: refLinkRef.current?.value || '',
             drive_link: driveLink,
             priority: priorityRef.current?.value || 'Média',
-            origin_id: originRef.current?.value || null,
+            origin_id: originRef.current?.value || null, // Ensure "" becomes null
             type_id: typeRef.current.value,
             status_id: statusId,
-            responsible_id: designerRef.current?.value || null,
+            responsible_id: designerRef.current?.value || null, // Ensure "" becomes null
             deadline: deadlineRef.current.value,
             description: descriptionRef.current?.value || '',
             goal: '',
             production_started_at: timerState.production_started_at,
-            accumulated_time: timerState.accumulated_time
+            accumulated_time: timerState.accumulated_time,
+            created_by: currentUser?.id || null // Fix for "created_by" constraint
         };
 
         try {
@@ -225,7 +274,15 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
             if (onCancel) onCancel();
         } catch (error: any) {
             console.error('Error saving demand:', error);
-            addToast(`Erro ao salvar demanda: ${error.message || 'Erro desconhecido'} `, 'error');
+
+            // 3. User Friendly Error Handling
+            if (error?.code === 'PGRST204' || error?.message?.includes('Could not find the')) {
+                alert('ERRO DE SISTEMA: O banco de dados está desatualizado. Por favor, avise o suporte para rodar o script "final_fix_v2.sql".');
+            } else if (error?.code === '22P02') {
+                alert('ERRO DE DADOS: Algum campo inválido foi enviado (ex: UUID vazio).');
+            } else {
+                addToast(`Erro ao salvar demanda: ${error.message || 'Erro desconhecido'} `, 'error');
+            }
         }
     };
 
@@ -269,44 +326,85 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
                 {isEditMode ? (
                     <>
                         {/* Top Status Bar */}
-                        <div className="mb-10 w-full">
-                            <div className={`rounded - xl px - 8 py - 5 border ${getCurrentStatusColor()} bg - zinc - 900 / 50 flex flex - col md: flex - row items - center justify - between gap - 4 w - full transition - colors`}>
+                        <div className="mb-8 w-full">
+                            <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-4 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm relative overflow-visible z-20">
 
-                                {/* Left: Status Label */}
-                                <div className="flex-1 flex justify-start">
-                                    <div className={`px - 4 py - 1.5 rounded - full font - bold text - sm tracking - wide uppercase border ${getCurrentStatusColor()} shadow - sm bg - zinc - 900 / 50 text - white`}>
-                                        {getCurrentStatusLabel()}
+                                {/* Status Indicator Line (Optional visual flair) */}
+                                <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${getCurrentStatusColor()}`} />
+
+                                {/* Left: Status Label / Dropdown */}
+                                <div className="flex-1 flex justify-start items-center gap-3 relative">
+                                    <span className="text-zinc-400 text-xs font-medium uppercase tracking-wider hidden md:block">Status</span>
+
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowStatusMenu(!showStatusMenu)}
+                                            className={`
+                                                px-5 py-2 rounded-full font-bold text-sm tracking-wide uppercase text-white shadow-md 
+                                                flex items-center gap-2 hover:brightness-110 transition-all cursor-pointer ring-offset-2 ring-offset-zinc-900 focus:ring-2
+                                                ${getCurrentStatusColor()}
+                                            `}
+                                        >
+                                            {getCurrentStatusLabel()}
+                                            <ChevronDown size={14} className={`transition-transform duration-200 ${showStatusMenu ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {/* Custom Dropdown Menu */}
+                                        {showStatusMenu && (
+                                            <>
+                                                {/* Backdrop to close */}
+                                                <div className="fixed inset-0 z-10 cursor-default" onClick={() => setShowStatusMenu(false)}></div>
+
+                                                {/* Menu List */}
+                                                <div className="absolute top-full left-0 mt-2 w-[220px] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
+                                                    {statuses.map(s => (
+                                                        <button
+                                                            key={s.id}
+                                                            onClick={() => handleStatusChange(s.id)}
+                                                            className={`
+                                                                w-full text-left px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wide text-white transition-all
+                                                                hover:scale-[1.02] flex items-center justify-between group
+                                                                ${s.color}
+                                                            `}
+                                                        >
+                                                            {s.name}
+                                                            {statusId === s.id && <Check size={14} />}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 
                                 {/* Center: Timer */}
-                                <div className="flex-1 flex justify-center">
+                                <div className="flex-1 flex flex-col items-center justify-center">
+                                    <span className="text-zinc-500 text-[10px] uppercase tracking-widest font-bold mb-1">Tempo em Produção</span>
                                     {isRunning ? (
-                                        <div className="flex items-center gap-3 text-primary font-mono text-4xl font-bold tracking-wider">
-                                            <Clock size={32} className="animate-pulse" />
-                                            {timerDisplay}
+                                        <div className="flex items-center gap-2 text-white font-mono text-3xl font-bold tracking-wider">
+                                            <div className="relative">
+                                                <div className="absolute inset-0 bg-primary/20 blur-md rounded-full animate-pulse"></div>
+                                                <Clock size={24} className="text-primary relative z-10 animate-pulse" />
+                                            </div>
+                                            <span className="tabular-nums relative z-10">{timerDisplay}</span>
                                         </div>
                                     ) : (
-                                        <span className="text-zinc-500 font-mono text-2xl">{timerDisplay}</span>
+                                        <div className="flex items-center gap-2 text-zinc-400 font-mono text-2xl font-medium tracking-wider">
+                                            <Clock size={20} />
+                                            <span className="tabular-nums">{timerDisplay}</span>
+                                        </div>
                                     )}
                                 </div>
 
-                                {/* Right: Action Dropdown */}
+                                {/* Right: Action Button */}
                                 <div className="flex-1 flex justify-end">
-                                    <div className="relative w-full max-w-[200px]">
-                                        <select
-                                            value={statusId}
-                                            onChange={(e) => handleStatusChange(e.target.value)}
-                                            disabled={!initialData?.id && statuses.length === 0}
-                                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-4 py-2 text-white appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                        >
-                                            <option value="" disabled>Selecione um status</option>
-                                            {statuses.map(s => (
-                                                <option key={s.id} value={s.id}>{s.name}</option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={16} />
-                                    </div>
+                                    <button
+                                        onClick={handleSubmit}
+                                        className="h-10 px-6 rounded-full bg-primary text-zinc-900 font-bold hover:bg-[#a5b900] transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(188,210,0,0.3)] hover:scale-105 active:scale-95"
+                                    >
+                                        <Check size={18} />
+                                        <span>Salvar</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -389,7 +487,7 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
                                                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={16} />
                                             </div>
                                         </label>
-                                        <label className="flex flex-col w-full md:col-span-2">
+                                        <label className="flex flex-col w-full">
                                             <p className="text-white text-sm font-medium leading-normal pb-2">Origem</p>
                                             <div className="relative">
                                                 <select ref={originRef} defaultValue={initialData?.origin_id || ""} className="w-full h-11 rounded-lg text-white focus:outline-0 focus:ring-1 focus:ring-primary border border-zinc-600 bg-zinc-900 px-4 text-sm appearance-none cursor-pointer focus:border-primary">
@@ -422,7 +520,7 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
                                             <p className="text-white text-sm font-medium leading-normal pb-2 flex items-center justify-between">
                                                 <span>Prazo <span className="text-red-400">*</span></span>
                                                 {initialData?.deadline && (() => {
-                                                    const deadline = new Date(initialData.deadline);
+                                                    const deadline = new Date(initialData.deadline + 'T12:00:00');
                                                     const now = new Date();
                                                     deadline.setHours(0, 0, 0, 0);
                                                     now.setHours(0, 0, 0, 0);
@@ -638,7 +736,7 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={20} />
                                     </div>
                                 </label>
-                                <label className="flex flex-col w-full md:col-span-2">
+                                <label className="flex flex-col w-full">
                                     <p className="text-white text-sm font-medium leading-normal pb-2">Origem</p>
                                     <div className="relative">
                                         <select ref={originRef} className="w-full h-12 rounded-[6px] text-white focus:outline-0 focus:ring-1 focus:ring-primary border border-zinc-600 bg-zinc-900/50 px-4 text-base appearance-none cursor-pointer focus:border-primary">
@@ -692,20 +790,15 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
                     </div>
                 )}
 
-                {/* Footer Actions */}
-                <div className="pt-6 border-t border-zinc-700 flex flex-col md:flex-row justify-end items-center gap-4 mt-8">
-                    <button
-                        onClick={onCancel}
-                        className="flex-1 md:flex-none flex items-center justify-center h-12 px-6 rounded-full bg-zinc-700 text-white text-base font-bold hover:bg-zinc-600 transition-colors w-full md:w-auto"
-                    >
-                        {isEditMode ? 'Fechar' : 'Cancelar'}
-                    </button>
-
-                    <button onClick={handleSubmit} className="w-full md:w-auto flex items-center justify-center gap-2 h-14 px-10 rounded-full bg-primary text-white hover:bg-[#a5b900] transition-all transform active:scale-95 shadow-[0_0_15px_rgba(188,210,0,0.3)]">
-                        <span className="text-base font-bold">{isEditMode ? 'Salvar Alterações' : 'Criar Demanda'}</span>
-                        <ArrowRight size={20} />
-                    </button>
-                </div>
+                {/* Footer Actions - Only for Create Mode (Edit saved in header) */}
+                {!isEditMode && (
+                    <div className="pt-6 border-t border-zinc-700 flex justify-end mt-8">
+                        <button onClick={handleSubmit} className="w-full md:w-auto flex items-center justify-center gap-2 h-14 px-10 rounded-full bg-primary text-zinc-900 hover:bg-[#a5b900] transition-all transform active:scale-95 shadow-[0_0_15px_rgba(188,210,0,0.3)]">
+                            <span className="text-base font-bold">Criar Demanda</span>
+                            <ArrowRight size={20} />
+                        </button>
+                    </div>
+                )}
 
             </div >
         </div >

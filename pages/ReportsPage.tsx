@@ -24,9 +24,9 @@ const ReportsPage = () => {
 
   useEffect(() => {
     if (profile) {
-      if (profile.role === 'Administrador') setViewMode('executive');
-      else if (profile.role === 'Gerente') setViewMode('manager');
-      else setViewMode('designer');
+      // Default to Team View ('manager') for everyone as requested
+      // "permorcane da equipe aparecer para usuarios comum"
+      setViewMode('manager');
     }
   }, [profile]);
 
@@ -59,21 +59,16 @@ const ReportsPage = () => {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           {/* Role Tabs - Only show relevant tabs for higher roles */}
           <div className="flex bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+            {/* Gestão de Time (Team Performance) - Visible to ALL Users as requested */}
             <button
-              onClick={() => handleTabChange('designer')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${viewMode === 'designer' ? 'bg-[#bcd200] text-zinc-900 shadow-lg' : 'text-zinc-400 hover:text-white'}`}
+              onClick={() => handleTabChange('manager')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${viewMode === 'manager' ? 'bg-[#bcd200] text-zinc-900 shadow-lg' : 'text-zinc-400 hover:text-white'}`}
             >
-              Minha Performance
+              Performance da Equipe
             </button>
-            {(profile?.role === 'Gerente' || profile?.role === 'Administrador' || isAdmin) && (
-              <button
-                onClick={() => handleTabChange('manager')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${viewMode === 'manager' ? 'bg-[#bcd200] text-zinc-900 shadow-lg' : 'text-zinc-400 hover:text-white'}`}
-              >
-                Gestão de Time
-              </button>
-            )}
-            {(profile?.role === 'Administrador' || isAdmin) && (
+
+            {/* Visão Executiva - Visible only for Managers and Admins */}
+            {(profile?.role === 'GERENTE' || profile?.role === 'ADMIN' || isAdmin) && (
               <button
                 onClick={() => handleTabChange('executive')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${viewMode === 'executive' ? 'bg-[#bcd200] text-zinc-900 shadow-lg' : 'text-zinc-400 hover:text-white'}`}

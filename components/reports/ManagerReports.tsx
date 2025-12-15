@@ -27,10 +27,22 @@ const ManagerReports: React.FC<ManagerReportsProps> = ({ stats }) => {
                 </div>
                 <div className="card-enterprise p-5 bg-zinc-900 border-l-4 border-l-purple-500">
                     <h3 className="text-zinc-400 text-xs font-bold uppercase mb-2">Gargalo Atual</h3>
-                    {/* Mock logic for bottleneck */}
                     <div className="flex items-center gap-2">
-                        <Loader2 className="text-purple-500 animate-spin-slow" size={24} />
-                        <p className="text-lg font-bold text-white">Revisão (40%)</p>
+                        {stats.byStatus.length > 0 ? (
+                            (() => {
+                                const bottleneck = [...stats.byStatus].sort((a: any, b: any) => b.value - a.value)[0];
+                                return (
+                                    <>
+                                        <Loader2 className="text-purple-500 animate-spin-slow" size={24} />
+                                        <p className="text-lg font-bold text-white">
+                                            {bottleneck.name} ({Math.round((bottleneck.value / stats.totalActive) * 100)}%)
+                                        </p>
+                                    </>
+                                );
+                            })()
+                        ) : (
+                            <p className="text-zinc-500 font-medium">Sem gargalos detectados</p>
+                        )}
                     </div>
                 </div>
             </div>
@@ -64,8 +76,8 @@ const ManagerReports: React.FC<ManagerReportsProps> = ({ stats }) => {
                                     <div className="h-2.5 w-full bg-zinc-800 rounded-full overflow-hidden">
                                         <div
                                             className={`h-full rounded-full transition-all duration-500 ${user.capacityPct > 100 ? 'bg-red-500' :
-                                                    user.capacityPct > 80 ? 'bg-orange-500' :
-                                                        'bg-[#bcd200]'
+                                                user.capacityPct > 80 ? 'bg-orange-500' :
+                                                    'bg-[#bcd200]'
                                                 }`}
                                             style={{ width: `${Math.min(user.capacityPct, 100)}%` }}
                                         ></div>
@@ -99,7 +111,7 @@ const ManagerReports: React.FC<ManagerReportsProps> = ({ stats }) => {
                 </div>
             </div>
 
-        </div>
+        </div >
     );
 };
 

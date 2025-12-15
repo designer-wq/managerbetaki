@@ -14,7 +14,7 @@ export const logAction = async (entry: LogEntry) => {
     if (!supabase) return;
 
     try {
-        await supabase.from('logs').insert([entry]);
+        await (supabase as any).from('logs').insert([entry]);
     } catch (error) {
         console.error('Failed to log action:', error);
     }
@@ -25,12 +25,16 @@ export const fetchTable = async (tableName: string) => {
     const supabase = getSupabase();
     if (!supabase) return [];
 
-    const { data, error } = await supabase.from(tableName).select('*').order('created_at', { ascending: false });
+    let { data, error } = await supabase.from(tableName).select('*').order('created_at', { ascending: false });
     if (error) {
-        console.error(`Error fetching ${tableName}:`, error);
-        return [];
+        const fallback = await supabase.from(tableName).select('*');
+        if (fallback.error) {
+            console.error(`Error fetching ${tableName}:`, fallback.error);
+            return [];
+        }
+        return fallback.data || [];
     }
-    return data;
+    return data || [];
 };
 
 // Relation Fetcher for Demands
@@ -45,7 +49,7 @@ export const fetchDemands = async () => {
             origins ( name ),
             demand_types ( name ),
             statuses ( name, color ),
-            profiles ( name, avatar_url )
+            responsible:profiles!demands_responsible_id_fkey ( name, avatar_url )
         `)
         .order('created_at', { ascending: false });
 
@@ -78,7 +82,7 @@ export const createRecord = async (tableName: string, record: any, userId?: stri
     const supabase = getSupabase();
     if (!supabase) return null;
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
         .from(tableName)
         .insert([record])
         .select()
@@ -95,7 +99,7 @@ export const createRecord = async (tableName: string, record: any, userId?: stri
             user_id: userId,
             action: 'CREATE',
             table_name: tableName,
-            record_id: data.id,
+            record_id: data?.id,
             details: record
         });
     }
@@ -108,7 +112,7 @@ export const updateRecord = async (tableName: string, id: string, updates: any, 
     const supabase = getSupabase();
     if (!supabase) return null;
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
         .from(tableName)
         .update(updates)
         .eq('id', id)
@@ -139,7 +143,7 @@ export const deleteRecord = async (tableName: string, id: string, userId?: strin
     const supabase = getSupabase();
     if (!supabase) return false;
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
         .from(tableName)
         .delete()
         .eq('id', id);
@@ -215,7 +219,7 @@ export const fetchAllLogs = async (days = 30) => {
 
     const { data, error } = await supabase
         .from('logs')
-        .select('*')
+        .select('id, record_id, action, details, created_at')
         .gte('created_at', date.toISOString())
         .order('created_at', { ascending: true });
 
@@ -233,10 +237,7 @@ export const fetchProfiles = async () => {
 
     const { data, error } = await supabase
         .from('profiles')
-        .select(`
-            *,
-            job_titles ( name )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -251,7 +252,7 @@ export const upsertRecord = async (tableName: string, record: any, onConflict: s
     const supabase = getSupabase();
     if (!supabase) return null;
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
         .from(tableName)
         .upsert(record, { onConflict })
         .select()
@@ -268,7 +269,7 @@ export const upsertRecord = async (tableName: string, record: any, onConflict: s
             user_id: userId,
             action: 'UPSERT',
             table_name: tableName,
-            record_id: data.id,
+            record_id: data?.id,
             details: record
         });
     }

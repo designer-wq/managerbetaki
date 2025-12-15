@@ -13,6 +13,7 @@ import {
 import { Layers, AlertTriangle, Users, Share2, FileText, Globe, Mail, MoreVertical } from 'lucide-react';
 import Header from '../components/Header';
 import { fetchDemands } from '../lib/api';
+import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 
 const COLORS = ['#bcd200', '#60a5fa', '#fb923c', '#71717a', '#a855f7', '#ec4899'];
 
@@ -27,18 +28,21 @@ const DashboardPage = () => {
   });
   const [loading, setLoading] = useState(true);
 
+  const loadData = async () => {
+    setLoading(true);
+    const data = await fetchDemands();
+    if (data) {
+      setDemands(data);
+      calculateStats(data);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      const data = await fetchDemands();
-      if (data) {
-        setDemands(data);
-        calculateStats(data);
-      }
-      setLoading(false);
-    };
     loadData();
   }, []);
+
+  useRealtimeSubscription(['demands'], loadData);
 
   const calculateStats = (data: any[]) => {
     // 1. Total Active (assuming all fetched are active for now, or filter by status)
@@ -55,7 +59,7 @@ const DashboardPage = () => {
     ).length;
 
     // 3. Workload (Unique profiles assigned)
-    const uniqueDesigners = new Set(data.filter(d => d.profiles?.name).map(d => d.profiles.name)).size;
+    const uniqueDesigners = new Set(data.filter(d => d.responsible?.name).map(d => d.responsible.name)).size;
     // Mocking a "capacity" calc: (Total Demands / (Unique Designers * 5)) * 100 ?
     // Let's just hardcode 85% or use dynamic if possible.
     // Using a simple metric: demands per designer avg.
@@ -116,7 +120,7 @@ const DashboardPage = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-zinc-950">
-      <Header title="Dashboard" subtitle="Overview of your marketing demands" />
+      <Header title="Dashboard" subtitle="Gerenciamento Bet Aki" />
 
       <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 custom-scrollbar">
         <div className="max-w-7xl mx-auto flex flex-col gap-6">
@@ -189,7 +193,7 @@ const DashboardPage = () => {
                   <p className="text-white text-2xl font-bold">{stats.total} Solicitações</p>
                 </div>
               </div>
-              <div className="flex-1 w-full relative h-64">
+              <div className="w-full h-[300px] min-h-[300px] relative">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats.weeklyVolume}>
                     <XAxis
@@ -203,7 +207,8 @@ const DashboardPage = () => {
                     />
                     <Tooltip
                       cursor={{ fill: 'transparent' }}
-                      contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff' }}
+                      contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '8px', color: '#bcd200' }}
+                      itemStyle={{ color: '#bcd200' }}
                     />
                     <Bar
                       dataKey="value"
@@ -211,7 +216,7 @@ const DashboardPage = () => {
                       fill="#27272a"
                     >
                       {stats.weeklyVolume.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.value > 5 ? '#bcd200' : '#27272a'} />
+                        <Cell key={`cell-${index}`} fill={entry.value > 0 ? '#bcd200' : '#27272a'} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -221,13 +226,13 @@ const DashboardPage = () => {
 
             <div className="flex flex-col rounded-2xl bg-zinc-900 border border-zinc-800 p-6">
               <h3 className="text-primary text-lg font-bold mb-4">Demandas por Tipo</h3>
-              <div className="flex-1 flex items-center justify-center relative w-full h-64">
+              <div className="w-full h-[300px] min-h-[300px] relative flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={stats.typeData}
-                      innerRadius={60}
-                      outerRadius={80}
+                      innerRadius={80}
+                      outerRadius={100}
                       paddingAngle={0}
                       dataKey="value"
                       stroke="none"
@@ -236,14 +241,14 @@ const DashboardPage = () => {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff' }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '8px', color: '#bcd200' }} itemStyle={{ color: '#bcd200' }} />
                   </PieChart>
                 </ResponsiveContainer>
                 {/* Legend overlay */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="text-center">
-                    <span className="text-3xl font-bold text-white">{stats.total}</span>
-                    <p className="text-xs text-zinc-500">Total</p>
+                    <span className="text-4xl font-bold text-white">{stats.total}</span>
+                    <p className="text-sm text-zinc-500">Total</p>
                   </div>
                 </div>
               </div>
@@ -293,11 +298,11 @@ const DashboardPage = () => {
                             <div className="flex items-center gap-3">
                               <div
                                 className="size-8 rounded-full bg-cover bg-center bg-zinc-700 flex items-center justify-center text-xs font-bold text-white"
-                                style={{ backgroundImage: demand.profiles?.avatar_url ? `url("${demand.profiles.avatar_url}")` : 'none' }}
+                                style={{ backgroundImage: demand.responsible?.avatar_url ? `url("${demand.responsible.avatar_url}")` : 'none' }}
                               >
-                                {!demand.profiles?.avatar_url && (demand.profiles?.name?.slice(0, 2).toUpperCase() || 'NA')}
+                                {!demand.responsible?.avatar_url && (demand.responsible?.name?.slice(0, 2).toUpperCase() || 'NA')}
                               </div>
-                              <span className="text-sm text-zinc-200">{demand.profiles?.name || 'Não atribuído'}</span>
+                              <span className="text-sm text-zinc-200">{demand.responsible?.name || 'Não atribuído'}</span>
                             </div>
                           </td>
                           <td className="p-4">
@@ -306,7 +311,7 @@ const DashboardPage = () => {
                             </span>
                           </td>
                           <td className="p-4 text-sm text-white font-medium whitespace-nowrap">
-                            {demand.deadline ? new Date(demand.deadline).toLocaleDateString() : '-'}
+                            {demand.deadline ? new Date(demand.deadline + 'T12:00:00').toLocaleDateString() : '-'}
                           </td>
                           <td className="p-4">
                             <div className="flex items-center gap-2 text-zinc-300 text-sm">

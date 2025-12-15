@@ -1,28 +1,34 @@
--- Fix RLS for app_config to allow anonymous access
-alter table public.app_config enable row level security;
+-- Create the storage bucket 'app-assets' if it doesn't exist
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('app-assets', 'app-assets', true)
+ON CONFLICT (id) DO NOTHING;
 
--- Drop existing restrictive policies to avoid conflicts
-drop policy if exists "Allow public read access" on public.app_config;
-drop policy if exists "Allow authenticated update" on public.app_config;
-drop policy if exists "Allow authenticated insert" on public.app_config;
+-- Policies for 'app-assets' bucket
+-- We drop them first to ensure we can recreate them without errors
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated Users Upload" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated Users Update" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated Users Delete" ON storage.objects;
 
--- Create permissive policies for app_config
-create policy "Allow all access" on public.app_config for all using (true);
+-- Allow Public Read Access (so everyone can see the logo)
+CREATE POLICY "Public Access"
+ON storage.objects FOR SELECT
+USING ( bucket_id = 'app-assets' );
 
--- Fix RLS for Storage (app-assets bucket)
--- We need to ensure the bucket exists and policies allow anon uploads
-insert into storage.buckets (id, name, public)
-values ('app-assets', 'app-assets', true)
-on conflict (id) do nothing;
+-- Allow Authenticated Users to Upload (INSERT)
+CREATE POLICY "Authenticated Users Upload"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK ( bucket_id = 'app-assets' );
 
--- Drop existing storage policies for this bucket
-drop policy if exists "Public Access" on storage.objects;
-drop policy if exists "Authenticated Upload" on storage.objects;
-drop policy if exists "Authenticated Update" on storage.objects;
-drop policy if exists "Allow all app-assets" on storage.objects;
+-- Allow Authenticated Users to Update (UPDATE)
+CREATE POLICY "Authenticated Users Update"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING ( bucket_id = 'app-assets' );
 
--- Create new permissive policy for app-assets
-create policy "Allow all app-assets"
-on storage.objects for all
-using ( bucket_id = 'app-assets' )
-with check ( bucket_id = 'app-assets' );
+-- Allow Authenticated Users to Delete (DELETE)
+CREATE POLICY "Authenticated Users Delete"
+ON storage.objects FOR DELETE
+TO authenticated
+USING ( bucket_id = 'app-assets' );

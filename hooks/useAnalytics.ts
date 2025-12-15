@@ -6,12 +6,13 @@ interface Demand {
     title: string;
     status_id: number;
     statuses?: { name: string; color: string };
-    priority_id: number;
-    priorities?: { name: string; color: string; icon: string };
+    priority: string; // Changed from ID/Relation to Text
+    // priority_id: number; // Removed
+    // priorities?: { name: string; color: string; icon: string }; // Removed
     type_id: number;
     demand_types?: { name: string };
     responsible_id?: string;
-    profiles?: { name: string; avatar_url: string };
+    responsible?: { name: string; avatar_url: string }; // Renamed from profiles
     deadline?: string;
     created_at: string;
 }
@@ -116,7 +117,7 @@ export const useAnalytics = (demands: Demand[], logs: any[], currentUser: any) =
             const isPastDeadline = deadlineDate < now && d.statuses?.name.toLowerCase() !== 'concluído';
             return !isLate && !isPastDeadline;
         });
-        const globalSLA = demands.length > 0 ? (slaCompliantDemands.length / demands.length) * 100 : 100;
+        const globalSLA = demands.length > 0 ? (slaCompliantDemands.length / demands.length) * 100 : 0;
 
         // 3. User Specific Stats (Designer)
         const myDemands = demands.filter(d => d.responsible_id === currentUser?.id);
@@ -136,7 +137,7 @@ export const useAnalytics = (demands: Demand[], logs: any[], currentUser: any) =
             const isPastDeadline = deadlineDate < now && d.statuses?.name.toLowerCase() !== 'concluído';
             return d.statuses?.name.toLowerCase() !== 'atrasado' && !isPastDeadline;
         });
-        const mySlaParam = myDemands.length > 0 ? (mySlaCompliant.length / myDemands.length) * 100 : 100;
+        const mySlaParam = myDemands.length > 0 ? (mySlaCompliant.length / myDemands.length) * 100 : 0;
 
         // My Work Distribution
         const myDistMap: Record<string, number> = {};
@@ -146,13 +147,24 @@ export const useAnalytics = (demands: Demand[], logs: any[], currentUser: any) =
         });
         const myDistribution = Object.entries(myDistMap).map(([name, value]) => ({ name, value }));
 
-        // My Timeline (Mocking purely for visual proof of concept if logs insufficient for daily)
+        // My Timeline (Real Data)
+        const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const weekMap = new Array(7).fill(0);
+
+        myDemands.forEach(d => {
+            const date = new Date(d.created_at);
+            weekMap[date.getDay()]++;
+        });
+
+        // Rotate to start on Mon (Seg)
         const myTimeline = [
-            { name: 'Seg', value: 2 },
-            { name: 'Ter', value: 4 },
-            { name: 'Qua', value: 5 }, // "Pico produtividade"
-            { name: 'Qui', value: 3 },
-            { name: 'Sex', value: 2 },
+            { name: 'Seg', value: weekMap[1] },
+            { name: 'Ter', value: weekMap[2] },
+            { name: 'Qua', value: weekMap[3] },
+            { name: 'Qui', value: weekMap[4] },
+            { name: 'Sex', value: weekMap[5] },
+            { name: 'Sáb', value: weekMap[6] },
+            { name: 'Dom', value: weekMap[0] },
         ];
 
         // Revisions (Count times moved to 'Revisão')
@@ -193,9 +205,9 @@ export const useAnalytics = (demands: Demand[], logs: any[], currentUser: any) =
         // Team Workload
         const userLoadMap: Record<string, { count: number; avatar: string }> = {};
         activeDemands.forEach(d => {
-            if (d.profiles?.name) {
-                if (!userLoadMap[d.profiles.name]) userLoadMap[d.profiles.name] = { count: 0, avatar: d.profiles.avatar_url };
-                userLoadMap[d.profiles.name].count++;
+            if (d.responsible?.name) { // Updated from profiles to responsible
+                if (!userLoadMap[d.responsible.name]) userLoadMap[d.responsible.name] = { count: 0, avatar: d.responsible.avatar_url };
+                userLoadMap[d.responsible.name].count++;
             }
         });
         const teamWorkload = Object.entries(userLoadMap)
@@ -208,7 +220,7 @@ export const useAnalytics = (demands: Demand[], logs: any[], currentUser: any) =
             .sort((a, b) => b.tasks - a.tasks);
 
         const atRiskCount = activeDemands.filter(d =>
-            (d.priorities?.name.toLowerCase() === 'urgente' || d.priorities?.name.toLowerCase() === 'alta') &&
+            (d.priority?.toLowerCase() === 'urgente' || d.priority?.toLowerCase() === 'alta') && // Updated: use string priority
             d.deadline && new Date(d.deadline) <= new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000) // Within 3 days
         ).length;
 

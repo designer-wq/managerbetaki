@@ -24,9 +24,15 @@ const DemandTimerBadge: React.FC<DemandTimerBadgeProps> = ({
     if (!isRunning && accumulatedTime === 0) return null;
 
     return (
-        <div className={`flex items-center gap-1.5 text-xs font-mono font-medium ${isRunning ? 'text-blue-400' : 'text-zinc-500'} ${className}`}>
-            <Clock size={12} className={isRunning ? "animate-pulse" : ""} />
-            <span>{time}</span>
+        <div className={`
+            inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-mono font-medium transition-all
+            ${isRunning
+                ? 'bg-primary/10 border-primary/20 text-primary shadow-[0_0_10px_rgba(188,210,0,0.1)]'
+                : 'bg-zinc-800/50 border-zinc-700 text-zinc-400'}
+            ${className}
+        `}>
+            <Clock size={13} className={isRunning ? "animate-pulse" : ""} />
+            <span className="tabular-nums tracking-wide">{time}</span>
         </div>
     );
 };

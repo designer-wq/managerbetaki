@@ -52,31 +52,176 @@ BEGIN
     END IF;
 END $$;
 
--- 6. Ensure RLS policies exist (Drop and Recreate to be safe)
--- Demands
+-- 6. Ensure RLS policies exist (CRUD per role 'authenticated')
+
+-- Helper: enable RLS and drop previous permissive policies
+ALTER TABLE public.origins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.demand_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.statuses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.permissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.demands ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow all access" ON public.demands;
-CREATE POLICY "Allow all access" ON public.demands FOR ALL USING (true);
-
--- Profiles
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow all access" ON public.profiles;
-CREATE POLICY "Allow all access" ON public.profiles FOR ALL USING (true);
-
--- Comments
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow all access" ON public.comments;
-CREATE POLICY "Allow all access" ON public.comments FOR ALL USING (true);
-
--- Job Titles
 ALTER TABLE public.job_titles ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow all access" ON public.job_titles;
-CREATE POLICY "Allow all access" ON public.job_titles FOR ALL USING (true);
-
--- Logs
 ALTER TABLE public.logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all access" ON public.origins;
+DROP POLICY IF EXISTS "Allow all access" ON public.demand_types;
+DROP POLICY IF EXISTS "Allow all access" ON public.statuses;
+DROP POLICY IF EXISTS "Allow all access" ON public.permissions;
+DROP POLICY IF EXISTS "Allow all access" ON public.demands;
+DROP POLICY IF EXISTS "Allow all access" ON public.comments;
+DROP POLICY IF EXISTS "Allow all access" ON public.job_titles;
 DROP POLICY IF EXISTS "Allow all access" ON public.logs;
-CREATE POLICY "Allow all access" ON public.logs FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all access" ON public.profiles;
+DROP POLICY IF EXISTS "Allow public read access" ON public.app_config;
+DROP POLICY IF EXISTS "Allow authenticated update" ON public.app_config;
+DROP POLICY IF EXISTS "Allow authenticated insert" ON public.app_config;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='origins') THEN
+        DROP POLICY IF EXISTS "origins_select_authenticated" ON public.origins;
+        DROP POLICY IF EXISTS "origins_insert_authenticated" ON public.origins;
+        DROP POLICY IF EXISTS "origins_update_authenticated" ON public.origins;
+        DROP POLICY IF EXISTS "origins_delete_authenticated" ON public.origins;
+        EXECUTE 'ALTER TABLE public.origins ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "origins_select_authenticated" ON public.origins FOR SELECT USING (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "origins_insert_authenticated" ON public.origins FOR INSERT WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "origins_update_authenticated" ON public.origins FOR UPDATE USING (auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "origins_delete_authenticated" ON public.origins FOR DELETE USING (auth.role() = ''authenticated'')';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='demand_types') THEN
+        DROP POLICY IF EXISTS "demand_types_select_authenticated" ON public.demand_types;
+        DROP POLICY IF EXISTS "demand_types_insert_authenticated" ON public.demand_types;
+        DROP POLICY IF EXISTS "demand_types_update_authenticated" ON public.demand_types;
+        DROP POLICY IF EXISTS "demand_types_delete_authenticated" ON public.demand_types;
+        EXECUTE 'ALTER TABLE public.demand_types ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "demand_types_select_authenticated" ON public.demand_types FOR SELECT USING (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "demand_types_insert_authenticated" ON public.demand_types FOR INSERT WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "demand_types_update_authenticated" ON public.demand_types FOR UPDATE USING (auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "demand_types_delete_authenticated" ON public.demand_types FOR DELETE USING (auth.role() = ''authenticated'')';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='statuses') THEN
+        DROP POLICY IF EXISTS "statuses_select_authenticated" ON public.statuses;
+        DROP POLICY IF EXISTS "statuses_insert_authenticated" ON public.statuses;
+        DROP POLICY IF EXISTS "statuses_update_authenticated" ON public.statuses;
+        DROP POLICY IF EXISTS "statuses_delete_authenticated" ON public.statuses;
+        EXECUTE 'ALTER TABLE public.statuses ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "statuses_select_authenticated" ON public.statuses FOR SELECT USING (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "statuses_insert_authenticated" ON public.statuses FOR INSERT WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "statuses_update_authenticated" ON public.statuses FOR UPDATE USING (auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "statuses_delete_authenticated" ON public.statuses FOR DELETE USING (auth.role() = ''authenticated'')';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='permissions') THEN
+        DROP POLICY IF EXISTS "permissions_select_authenticated" ON public.permissions;
+        DROP POLICY IF EXISTS "permissions_insert_authenticated" ON public.permissions;
+        DROP POLICY IF EXISTS "permissions_update_authenticated" ON public.permissions;
+        DROP POLICY IF EXISTS "permissions_delete_authenticated" ON public.permissions;
+        EXECUTE 'ALTER TABLE public.permissions ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "permissions_select_authenticated" ON public.permissions FOR SELECT USING (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "permissions_insert_authenticated" ON public.permissions FOR INSERT WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "permissions_update_authenticated" ON public.permissions FOR UPDATE USING (auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "permissions_delete_authenticated" ON public.permissions FOR DELETE USING (auth.role() = ''authenticated'')';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='demands') THEN
+        DROP POLICY IF EXISTS "demands_select_authenticated" ON public.demands;
+        DROP POLICY IF EXISTS "demands_insert_authenticated" ON public.demands;
+        DROP POLICY IF EXISTS "demands_update_authenticated" ON public.demands;
+        DROP POLICY IF EXISTS "demands_delete_authenticated" ON public.demands;
+        EXECUTE 'ALTER TABLE public.demands ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "demands_select_authenticated" ON public.demands FOR SELECT USING (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "demands_insert_authenticated" ON public.demands FOR INSERT WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "demands_update_authenticated" ON public.demands FOR UPDATE USING (auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "demands_delete_authenticated" ON public.demands FOR DELETE USING (auth.role() = ''authenticated'')';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='comments') THEN
+        DROP POLICY IF EXISTS "comments_select_authenticated" ON public.comments;
+        DROP POLICY IF EXISTS "comments_insert_authenticated" ON public.comments;
+        DROP POLICY IF EXISTS "comments_update_authenticated" ON public.comments;
+        DROP POLICY IF EXISTS "comments_delete_authenticated" ON public.comments;
+        EXECUTE 'ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "comments_select_authenticated" ON public.comments FOR SELECT USING (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "comments_insert_authenticated" ON public.comments FOR INSERT WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "comments_update_authenticated" ON public.comments FOR UPDATE USING (auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "comments_delete_authenticated" ON public.comments FOR DELETE USING (auth.role() = ''authenticated'')';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='job_titles') THEN
+        DROP POLICY IF EXISTS "job_titles_select_authenticated" ON public.job_titles;
+        DROP POLICY IF EXISTS "job_titles_insert_authenticated" ON public.job_titles;
+        DROP POLICY IF EXISTS "job_titles_update_authenticated" ON public.job_titles;
+        DROP POLICY IF EXISTS "job_titles_delete_authenticated" ON public.job_titles;
+        EXECUTE 'ALTER TABLE public.job_titles ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "job_titles_select_authenticated" ON public.job_titles FOR SELECT USING (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "job_titles_insert_authenticated" ON public.job_titles FOR INSERT WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "job_titles_update_authenticated" ON public.job_titles FOR UPDATE USING (auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "job_titles_delete_authenticated" ON public.job_titles FOR DELETE USING (auth.role() = ''authenticated'')';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='logs') THEN
+        DROP POLICY IF EXISTS "logs_select_authenticated" ON public.logs;
+        DROP POLICY IF EXISTS "logs_insert_authenticated" ON public.logs;
+        DROP POLICY IF EXISTS "logs_update_authenticated" ON public.logs;
+        DROP POLICY IF EXISTS "logs_delete_authenticated" ON public.logs;
+        EXECUTE 'ALTER TABLE public.logs ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "logs_select_authenticated" ON public.logs FOR SELECT USING (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "logs_insert_authenticated" ON public.logs FOR INSERT WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "logs_update_authenticated" ON public.logs FOR UPDATE USING (auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "logs_delete_authenticated" ON public.logs FOR DELETE USING (auth.role() = ''authenticated'')';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='profiles') THEN
+        DROP POLICY IF EXISTS "profiles_select_authenticated" ON public.profiles;
+        DROP POLICY IF EXISTS "profiles_update_self" ON public.profiles;
+        EXECUTE 'ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "profiles_select_authenticated" ON public.profiles FOR SELECT USING (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "profiles_update_self" ON public.profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id)';
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='app_config') THEN
+        DROP POLICY IF EXISTS "app_config_select_public" ON public.app_config;
+        DROP POLICY IF EXISTS "app_config_insert_authenticated" ON public.app_config;
+        DROP POLICY IF EXISTS "app_config_update_authenticated" ON public.app_config;
+        EXECUTE 'ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY';
+        EXECUTE 'CREATE POLICY "app_config_select_public" ON public.app_config FOR SELECT USING (true)';
+        EXECUTE 'CREATE POLICY "app_config_insert_authenticated" ON public.app_config FOR INSERT WITH CHECK (auth.role() = ''authenticated'')';
+        EXECUTE 'CREATE POLICY "app_config_update_authenticated" ON public.app_config FOR UPDATE USING (auth.role() = ''authenticated'') WITH CHECK (auth.role() = ''authenticated'')';
+    END IF;
+END $$;
 
 -- 7. Insert default job titles (ignore if duplicates exist)
 INSERT INTO public.job_titles (name) 

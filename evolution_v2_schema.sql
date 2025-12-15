@@ -18,3 +18,11 @@ BEGIN
         ALTER TABLE public.profiles ADD COLUMN weekly_capacity integer DEFAULT 10;
     END IF;
 END $$;
+
+-- 3. Add 'permission_level' to 'profiles' table (1=Colaborador, 2=Editor, 3=Gerente, 4=Administrador)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'permission_level') THEN
+        ALTER TABLE public.profiles ADD COLUMN permission_level integer DEFAULT 1;
+    END IF;
+END $$;

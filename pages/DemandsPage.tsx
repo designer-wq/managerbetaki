@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Header from '../components/Header';
 import { Filter, Download, Plus, Clock, AlertCircle, CheckCircle, MoreVertical, FileDown, Search, Copy, Trash2, Flag, Pencil, ArrowUpRight } from 'lucide-react';
 import SlideOver from '../components/ui/SlideOver';
 import CreateDemandForm from '../components/demands/CreateDemandForm';
 import DemandTimerBadge from '../components/demands/DemandTimerBadge';
-import { fetchDemands, deleteRecord, createRecord } from '../lib/api';
+import { fetchDemands, deleteRecord, createRecord, fetchTable } from '../lib/api';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useToast } from '../components/ui/ToastContext'; // Use toast
+import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 
 const DemandsPage = () => {
    const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -15,6 +17,7 @@ const DemandsPage = () => {
    // Menu State
    const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
    const [demandToDelete, setDemandToDelete] = useState<string | null>(null);
+   const [menuPosition, setMenuPosition] = useState<{ top: number, left: number } | null>(null);
 
    const menuRef = useRef<HTMLDivElement>(null);
    const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -24,21 +27,29 @@ const DemandsPage = () => {
 
    // Data State
    const [demands, setDemands] = useState<any[]>([]);
+   const [statuses, setStatuses] = useState<any[]>([]);
    const [loading, setLoading] = useState(true);
 
    // Filter State
    const [searchTerm, setSearchTerm] = useState('');
+   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
    const loadDemands = async () => {
       setLoading(true);
-      const data = await fetchDemands();
-      setDemands(data || []);
+      const [demandsData, statusesData] = await Promise.all([
+         fetchDemands(),
+         fetchTable('statuses')
+      ]);
+      setDemands(demandsData || []);
+      setStatuses(statusesData || []);
       setLoading(false);
    };
 
    useEffect(() => {
       loadDemands();
    }, []);
+
+   useRealtimeSubscription(['demands'], loadDemands);
 
    const handleDeleteDemand = async (id: string) => {
       try {
@@ -131,16 +142,36 @@ const DemandsPage = () => {
       delayed: demands.filter(d => {
          const isCompleted = d.statuses?.name.toLowerCase().includes('concluído');
          if (isCompleted || !d.deadline) return false;
-         return new Date(d.deadline) < new Date();
+         return new Date(d.deadline + 'T23:59:59') < new Date();
       }).length
    };
 
    // --- Filtering ---
-   const filteredDemands = demands.filter(d =>
-      d.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.profiles?.name.toLowerCase().includes(searchTerm.toLowerCase())
-   );
+   const filteredDemands = demands.filter(d => {
+      const matchesSearch = d.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         d.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         d.responsible?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus = selectedStatus === 'all' || d.status_id?.toString() === selectedStatus;
+
+      return matchesSearch && matchesStatus;
+   });
+
+   const toggleMenu = (e: React.MouseEvent, item: any) => {
+      e.stopPropagation();
+      if (activeMenuId === item.id) {
+         setActiveMenuId(null);
+      } else {
+         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+         // Position menu to the left of the button, slightly up
+         setMenuPosition({
+            top: rect.bottom + window.scrollY + 5,
+            left: rect.right - 192 // 192px is w-48
+         });
+         setActiveMenuId(item.id);
+         setDemandToDelete(null);
+      }
+   };
 
    return (
       <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-zinc-950">
@@ -219,8 +250,8 @@ const DemandsPage = () => {
                </div>
 
                {/* Filters */}
-               <div className="mb-6 flex flex-col gap-4">
-                  <div className="flex w-full items-center bg-zinc-900/50 px-4 py-3 border border-zinc-700/50 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all rounded-[6px]">
+               <div className="mb-6 flex flex-col md:flex-row gap-4">
+                  <div className="flex w-full md:w-auto flex-1 items-center bg-zinc-900/50 px-4 py-3 border border-zinc-700/50 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all rounded-[6px]">
                      <Search size={20} className="text-zinc-500" />
                      <input
                         className="ml-3 w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
@@ -229,6 +260,30 @@ const DemandsPage = () => {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                      />
+                  </div>
+
+                  {/* Status Filter */}
+                  <div className="w-full md:w-64">
+                     <div className="relative">
+                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={20} />
+                        <select
+                           value={selectedStatus}
+                           onChange={(e) => setSelectedStatus(e.target.value)}
+                           className="w-full appearance-none bg-zinc-900/50 border border-zinc-700/50 rounded-[6px] py-3 pl-10 pr-8 text-sm text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer"
+                        >
+                           <option value="all">Todos os Status</option>
+                           {statuses.map(status => (
+                              <option key={status.id} value={status.id}>
+                                 {status.name}
+                              </option>
+                           ))}
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                           <svg className="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                           </svg>
+                        </div>
+                     </div>
                   </div>
                </div>
 
@@ -244,6 +299,7 @@ const DemandsPage = () => {
                               <th className="px-6 py-4 font-medium text-zinc-400 text-xs uppercase tracking-wider">Prioridade</th>
                               <th className="px-6 py-4 font-medium text-zinc-400 text-xs uppercase tracking-wider">Atribuído a</th>
                               <th className="px-6 py-4 font-medium text-zinc-400 text-xs uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-4 font-medium text-zinc-400 text-xs uppercase tracking-wider">Tempo</th>
                               <th className="px-6 py-4 font-medium text-zinc-400 text-xs uppercase tracking-wider">Prazo</th>
                               <th className="px-6 py-4 font-medium text-zinc-400 text-xs uppercase tracking-wider">Tipo</th>
                               <th className="px-6 py-4 text-right font-medium text-zinc-400 text-xs uppercase tracking-wider">Ação</th>
@@ -252,7 +308,7 @@ const DemandsPage = () => {
                         <tbody className="divide-y divide-zinc-800/50">
                            {filteredDemands.length === 0 && !loading && (
                               <tr>
-                                 <td colSpan={6} className="px-6 py-8 text-center text-zinc-500">
+                                 <td colSpan={8} className="px-6 py-8 text-center text-zinc-500">
                                     Nenhuma demanda encontrada.
                                  </td>
                               </tr>
@@ -261,12 +317,12 @@ const DemandsPage = () => {
                               <tr
                                  key={item.id}
                                  onClick={() => handleRowClick(item)}
-                                 className="group transition-colors relative"
+                                 className="group transition-colors relative cursor-pointer hover:bg-zinc-800/30"
                               >
                                  <td className="px-6 py-4">
                                     <div className="flex flex-col">
-                                       <span className="table-content-title font-display">{item.title}</span>
-                                       <span className="table-content-id font-mono">#{item.id.slice(0, 8)}</span>
+                                       <span className="table-content-title font-display font-medium text-white">{item.title}</span>
+                                       <span className="table-content-id font-mono text-zinc-500 text-xs">#{item.id.slice(0, 8)}</span>
                                     </div>
                                  </td>
                                  <td className="px-6 py-4">
@@ -288,37 +344,37 @@ const DemandsPage = () => {
                                  </td>
                                  <td className="px-6 py-4">
                                     <div className="flex items-center gap-3">
-                                       <div className="h-7 w-7 overflow-hidden rounded-full bg-zinc-800 border border-zinc-700">
-                                          {item.profiles?.avatar_url ? (
-                                             <img src={item.profiles.avatar_url} alt={item.profiles.name} className="h-full w-full object-cover" />
+                                       <div className="h-7 w-7 overflow-hidden rounded-full bg-zinc-800 border border-zinc-700 shrink-0">
+                                          {item.responsible?.avatar_url ? (
+                                             <img src={item.responsible.avatar_url} alt={item.responsible.name} className="h-full w-full object-cover" />
                                           ) : (
-                                             <div className="h-full w-full flex items-center justify-center text-[10px] text-zinc-400 uppercase font-bold">{item.profiles?.name?.slice(0, 2) || '?'}</div>
+                                             <div className="h-full w-full flex items-center justify-center text-[10px] text-zinc-400 uppercase font-bold">{item.responsible?.name?.slice(0, 2) || '?'}</div>
                                           )}
                                        </div>
-                                       <span className="text-sm font-medium text-zinc-300">{item.profiles?.name || 'Não atribuído'}</span>
+                                       <span className="text-sm font-medium text-zinc-300 truncate max-w-[120px]">{item.responsible?.name || 'Não atribuído'}</span>
                                     </div>
                                  </td>
                                  <td className="px-6 py-4">
                                     {/* Status: Strict Pill */}
-                                    <div className="flex flex-col gap-1 items-start">
-                                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide ring-1 ring-inset ${item.statuses?.color ? 'text-white' : 'text-zinc-400'} ${item.statuses?.color || 'bg-zinc-800 ring-zinc-700'}`}>
-                                          {item.statuses?.name || 'Indefinido'}
-                                       </span>
-                                       <DemandTimerBadge
-                                          statusName={item.statuses?.name}
-                                          productionStartedAt={item.production_started_at}
-                                          accumulatedTime={item.accumulated_time}
-                                       />
-                                    </div>
+                                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide ring-1 ring-inset ${item.statuses?.color ? 'text-white' : 'text-zinc-400'} ${item.statuses?.color || 'bg-zinc-800 ring-zinc-700'}`}>
+                                       {item.statuses?.name || 'Indefinido'}
+                                    </span>
+                                 </td>
+                                 <td className="px-6 py-4">
+                                    <DemandTimerBadge
+                                       statusName={item.statuses?.name}
+                                       productionStartedAt={item.production_started_at}
+                                       accumulatedTime={item.accumulated_time}
+                                    />
                                  </td>
                                  <td className="px-6 py-4">
                                     <div className="flex flex-col gap-0.5">
                                        <div className="flex items-center gap-1.5 text-sm font-medium text-zinc-300">
-                                          {item.deadline ? new Date(item.deadline).toLocaleDateString() : '-'}
+                                          {item.deadline ? new Date(item.deadline + 'T12:00:00').toLocaleDateString() : '-'}
                                        </div>
                                        {(() => {
                                           if (!item.deadline) return null;
-                                          const deadline = new Date(item.deadline);
+                                          const deadline = new Date(item.deadline + 'T12:00:00');
                                           const now = new Date();
                                           deadline.setHours(0, 0, 0, 0);
                                           now.setHours(0, 0, 0, 0);
@@ -343,85 +399,15 @@ const DemandsPage = () => {
                                  <td className="px-6 py-4">
                                     <span className="text-zinc-400 text-sm">{item.demand_types?.name || 'N/A'}</span>
                                  </td>
-                                 <td className="px-6 py-4 text-right relative">
-                                    <button
-                                       onClick={(e) => toggleMenu(e, item)}
-                                       className="h-8 w-8 rounded-md text-zinc-500 hover:bg-zinc-800 hover:text-white transition-colors flex items-center justify-center"
-                                    >
-                                       <MoreVertical size={16} />
-                                    </button>
-
-                                    {activeMenuId === item.id && (
-                                       <div
-                                          ref={menuRef}
-                                          className="absolute right-0 mt-2 w-48 rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl z-50 overflow-hidden"
-                                          onClick={(e) => e.stopPropagation()}
+                                 <td className="px-6 py-4 text-right">
+                                    <div className="flex justify-end">
+                                       <button
+                                          onClick={(e) => toggleMenu(e, item)}
+                                          className="h-8 w-8 rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors flex items-center justify-center focus:outline-none focus:ring-1 focus:ring-zinc-700"
                                        >
-                                          {demandToDelete === item.id ? (
-                                             <div className="p-4">
-                                                <p className="text-sm text-zinc-300">
-                                                   Tem certeza que deseja excluir esta demanda? Isso excluirá permanentemente a demanda.
-                                                </p>
-                                                <div className="flex justify-end gap-2 mt-4">
-                                                   <button
-                                                      onClick={() => setActiveMenuId(null)}
-                                                      className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
-                                                   >
-                                                      Cancelar
-                                                   </button>
-                                                   {can('demands', 'delete') && (
-                                                      <button
-                                                         onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteDemand(item.id);
-                                                         }}
-                                                         className="px-3 py-1.5 text-xs bg-red-500/10 text-red-400 border border-red-500/20 rounded-md hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
-                                                      >
-                                                         <Trash2 size={12} />
-                                                         Confirmar Exclusão
-                                                      </button>
-                                                   )}
-                                                </div>
-                                             </div>
-                                          ) : (
-                                             <div className="py-1">
-                                                {can('demands', 'edit') && (
-                                                   <>
-                                                      <button
-                                                         onClick={() => handleDuplicate(item)}
-                                                         className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors flex items-center gap-2"
-                                                      >
-                                                         <Copy size={14} />
-                                                         Duplicar
-                                                      </button>
-                                                      <button
-                                                         onClick={() => {
-                                                            handleEdit(item);
-                                                            setActiveMenuId(null);
-                                                         }}
-                                                         className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors flex items-center gap-2"
-                                                      >
-                                                         <Pencil size={14} />
-                                                         Editar
-                                                      </button>
-                                                   </>
-                                                )}
-                                                {can('demands', 'delete') && (
-                                                   <button
-                                                      onClick={(e) => {
-                                                         e.stopPropagation();
-                                                         setDemandToDelete(item.id);
-                                                      }}
-                                                      className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
-                                                   >
-                                                      <Trash2 size={14} />
-                                                      Excluir
-                                                   </button>
-                                                )}
-                                             </div>
-                                          )}
-                                       </div>
-                                    )}
+                                          <MoreVertical size={16} />
+                                       </button>
+                                    </div>
                                  </td>
                               </tr>
                            ))}
@@ -431,6 +417,89 @@ const DemandsPage = () => {
                </div>
             </div>
          </div >
+
+         {/* Portal for Actions Menu */}
+         {activeMenuId && menuPosition && document.body && createPortal(
+            <div
+               ref={menuRef}
+               style={{
+                  position: 'fixed',
+                  top: `${menuPosition.top}px`,
+                  left: `${menuPosition.left}px`,
+                  zIndex: 9999
+               }}
+               className="w-48 rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+               onClick={(e) => e.stopPropagation()}
+            >
+               {demandToDelete === activeMenuId ? (
+                  <div className="p-4">
+                     <p className="text-sm text-zinc-300">
+                        Excluir permanentemente?
+                     </p>
+                     <div className="flex justify-end gap-2 mt-4">
+                        <button
+                           onClick={() => setActiveMenuId(null)}
+                           className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+                        >
+                           Cancelar
+                        </button>
+                        {can('demands', 'delete') && (
+                           <button
+                              onClick={() => handleDeleteDemand(activeMenuId)}
+                              className="px-3 py-1.5 text-xs bg-red-500/10 text-red-400 border border-red-500/20 rounded-md hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
+                           >
+                              <Trash2 size={12} />
+                              Excluir
+                           </button>
+                        )}
+                     </div>
+                  </div>
+               ) : (
+                  <div className="py-1">
+                     {can('demands', 'edit') && (
+                        <>
+                           <button
+                              onClick={() => {
+                                 const demand = demands.find(d => d.id === activeMenuId);
+                                 if (demand) handleDuplicate(demand);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors flex items-center gap-2"
+                           >
+                              <Copy size={14} />
+                              Duplicar
+                           </button>
+                           <button
+                              onClick={() => {
+                                 const demand = demands.find(d => d.id === activeMenuId);
+                                 if (demand) {
+                                    handleEdit(demand);
+                                    setActiveMenuId(null);
+                                 }
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors flex items-center gap-2"
+                           >
+                              <Pencil size={14} />
+                              Editar
+                           </button>
+                        </>
+                     )}
+                     {can('demands', 'delete') && (
+                        <button
+                           onClick={(e) => {
+                              e.stopPropagation();
+                              setDemandToDelete(activeMenuId);
+                           }}
+                           className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                        >
+                           <Trash2 size={14} />
+                           Excluir
+                        </button>
+                     )}
+                  </div>
+               )}
+            </div>,
+            document.body
+         )}
 
 
 
@@ -453,20 +522,7 @@ const DemandsPage = () => {
                   setSelectedDemand(null);
                   loadDemands();
                }}
-               initialData={selectedDemand?.id ? selectedDemand : (selectedDemand ? selectedDemand : null)} // Handle copy vs edit
-               // If selectedDemand has no ID, it's a copy/new pre-fill?
-               // CreateDemandForm expects initialData to have ID for Edit Mode.
-               // If I pass data without ID, it might treat as new?
-               // Let's check CreateDemandForm logic. "const isEditMode = !!initialData;"
-               // If I pass object without ID, isEditMode is true.
-               // I should pass null if it's new.
-               // For duplicate: I want to pre-fill but CREATE.
-               // CreateDemandForm might not support pre-fill for new.
-               // I'll leave it as is for now.
-               currentUser={{ id: 'current-user-id-placeholder' }} // We need to pass current user? AuthContext should handle it?
-            // CreateDemandForm usually gets it from prop or local storage?
-            // I'll let CreateDemandForm handle it if it uses useAuth() inside (it doesn't yet).
-            // I should pass useAuth().user to it.
+               initialData={selectedDemand?.id ? selectedDemand : (selectedDemand ? selectedDemand : null)}
             />
          </SlideOver>
 

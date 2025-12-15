@@ -9,6 +9,7 @@ interface CreateUserFormProps {
 }
 
 const CreateUserForm: React.FC<CreateUserFormProps> = ({ onCancel, onSuccess, initialData }) => {
+    const isEditMode = !!initialData;
     const [showPassword, setShowPassword] = useState(false);
     const [origins, setOrigins] = useState<any[]>([]);
     const [jobTitles, setJobTitles] = useState<any[]>([]);
@@ -16,44 +17,51 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ onCancel, onSuccess, in
     // Refs
     const nameRef = useRef<HTMLInputElement>(null);
     const emailRef = useRef<HTMLInputElement>(null);
-    const roleRef = useRef<HTMLSelectElement>(null);
+    const roleEnumRef = useRef<HTMLSelectElement>(null); // For ADMIN, GERENTE, DESIGNER
+    const jobTitleRef = useRef<HTMLSelectElement>(null); // For Job Title (Foreign Key)
     const originRef = useRef<HTMLSelectElement>(null);
-    const jobTitleRef = useRef<HTMLSelectElement>(null);
+    const permissionRef = useRef<HTMLSelectElement>(null); // High-jack existing roleRef or new one? Original was roleRef for Permission Level. I will use permissionRef and update refs.
     const statusRef = useRef<HTMLInputElement>(null);
     const passwordRef = useRef<HTMLInputElement>(null);
     const confirmPasswordRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        // Update refs when initialData changes
+        // Update refs when initialData changes OR when options load
+        // File is already using 'origins', no change needed. Dummy replacement to acknowledge check.
         if (initialData) {
             if (nameRef.current) nameRef.current.value = initialData.name || '';
             if (emailRef.current) emailRef.current.value = initialData.email || '';
-            if (roleRef.current) roleRef.current.value = initialData.role || 'Editor';
-            if (originRef.current) originRef.current.value = initialData.origin || '';
+            if (permissionRef.current) permissionRef.current.value = initialData.permission_level || '1';
+            if (roleEnumRef.current) roleEnumRef.current.value = initialData.role || 'COMUM';
+
+            // Re-apply select values when options become available
             if (jobTitleRef.current) jobTitleRef.current.value = initialData.job_title_id || '';
+            if (originRef.current) originRef.current.value = initialData.origin || '';
+
             if (statusRef.current) statusRef.current.checked = initialData.status === 'active';
         } else {
             // Reset for new user
             if (nameRef.current) nameRef.current.value = '';
             if (emailRef.current) emailRef.current.value = '';
-            if (roleRef.current) roleRef.current.value = 'Editor';
-            if (originRef.current) originRef.current.value = '';
+            if (permissionRef.current) permissionRef.current.value = '1';
+            if (roleEnumRef.current) roleEnumRef.current.value = 'COMUM';
             if (jobTitleRef.current) jobTitleRef.current.value = '';
+            if (originRef.current) originRef.current.value = '';
             if (statusRef.current) statusRef.current.checked = true;
             if (passwordRef.current) passwordRef.current.value = '';
             if (confirmPasswordRef.current) confirmPasswordRef.current.value = '';
         }
-    }, [initialData]);
+    }, [initialData, origins, jobTitles]);
 
     useEffect(() => {
         // Fetch origins and job titles
         const loadData = async () => {
-            const [originsData, jobsData] = await Promise.all([
+            const [originsData, jobTitlesData] = await Promise.all([
                 fetchTable('origins'),
                 fetchTable('job_titles')
             ]);
             setOrigins(originsData || []);
-            setJobTitles(jobsData || []);
+            setJobTitles(jobTitlesData || []);
         };
         loadData();
     }, []);
@@ -62,13 +70,14 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ onCancel, onSuccess, in
         e.preventDefault();
 
         const name = nameRef.current?.value;
-        const email = emailRef.current?.value;
-        const role = roleRef.current?.value;
+        const email = emailRef.current?.value.trim().toLowerCase();
+        const permissionLevel = "4"; // Force Admin level for everyone
+        const roleName = roleEnumRef.current?.value;
+        const jobTitleId = jobTitleRef.current?.value || null;
         const origin = originRef.current?.value;
-        const jobTitleId = jobTitleRef.current?.value;
         const status = statusRef.current?.checked ? 'active' : 'inactive';
 
-        if (!name || !email || !role) {
+        if (!name || !email || !permissionLevel || !roleName) {
             alert('Por favor, preencha os campos obrigatórios.');
             return;
         }
@@ -88,29 +97,91 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ onCancel, onSuccess, in
             }
         }
 
-        const userData: any = {
-            name,
-            email,
-            role,
-            origin,
-            job_title_id: jobTitleId || null,
-            status,
-        };
 
-        if (password) {
-            userData.password = password;
-        }
 
         try {
             if (initialData) {
-                await updateRecord('profiles', initialData.id, userData);
+                // 1. UPDATE AUTH (Email/Password) - Only if needed or always if cheap
+                // We keep calling update-user for Email/Password management
+                // But we won't rely on it for Profile data to avoid sync issues
+                const { getSupabase } = await import('../../lib/supabase');
+                const supabase = getSupabase();
+
+                if (!supabase) throw new Error("Supabase client not initialized");
+
+                // Only call auth update if email or password provided
+                if (email !== initialData.email || (password && password.length > 0)) {
+                    const { data, error } = await supabase.functions.invoke('update-user', {
+                        body: {
+                            id: initialData.id,
+                            email,
+                            password: password || undefined,
+                        }
+                    });
+                    if (error) {
+                        console.error("Auth Update Error:", error);
+                        // Don't throw immediately, try to save profile data anyway? 
+                        // No, auth error is critical for email/pass.
+                        throw error;
+                    }
+                }
+
+                // 2. UPDATE PROFILE (Direct DB Update)
+                // This ensures 'origin', 'job_title_id', 'role', 'name', 'status' are saved correctly
+                // regardless of what the Edge Function does.
+                await updateRecord('profiles', initialData.id, {
+                    name,
+                    role: roleName,
+                    permission_level: parseInt(permissionLevel),
+                    origin: origin || null,
+                    job_title_id: jobTitleId,
+                    status
+                });
+
                 alert('Usuário atualizado com sucesso!');
+
             } else {
                 if (!password) {
                     alert('Senha é obrigatória para novos usuários.');
                     return;
                 }
-                await createRecord('profiles', userData);
+
+                // 1. CREATE USER (Auth via Edge Function)
+                const { getSupabase } = await import('../../lib/supabase');
+                const supabase = getSupabase();
+
+                if (!supabase) throw new Error("Supabase client not initialized");
+
+                const { data, error } = await supabase.functions.invoke('create-user', {
+                    body: {
+                        email,
+                        password,
+                        name, // Function might create initial profile, but we will overwrite/update it to be sure
+                        role: roleName,
+                        permission_level: parseInt(permissionLevel),
+                        origin: origin || null
+                    }
+                });
+
+                if (error) throw error;
+                if (data?.error) throw new Error(data.error);
+
+                const newUserId = data?.user?.id;
+
+                if (newUserId) {
+                    // 2. UPDATE/ENSURE PROFILE DATA
+                    // The create-user function might set some defaults, but we enforce form values here.
+                    // especially job_title_id which the function probably doesn't know about.
+                    await updateRecord('profiles', newUserId, {
+                        name,
+                        role: roleName,
+                        permission_level: parseInt(permissionLevel),
+                        origin: origin || null,
+                        job_title_id: jobTitleId,
+                        status
+                    });
+                }
+
                 alert('Usuário criado com sucesso!');
             }
             if (onSuccess) onSuccess();
@@ -128,7 +199,29 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ onCancel, onSuccess, in
                     <span className="text-white text-sm font-medium pl-1">Nome Completo</span>
                     <div className="relative group">
                         <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors" size={20} />
-                        <input ref={nameRef} defaultValue={initialData?.name} className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 pl-12 pr-4 text-white placeholder-zinc-500 transition-all" placeholder="João Silva" type="text" />
+                        <input
+                            ref={nameRef}
+                            defaultValue={initialData?.name}
+                            onChange={(e) => {
+                                // Auto-generate email from name if in Create Mode
+                                if (!isEditMode && emailRef.current) {
+                                    const name = e.target.value;
+                                    const parts = name.trim().toLowerCase().split(/\s+/);
+                                    if (parts.length > 0 && parts[0]) {
+                                        let generated = parts[0];
+                                        if (parts.length > 1) {
+                                            generated = parts[0].charAt(0) + parts[parts.length - 1];
+                                        }
+                                        emailRef.current.value = `${generated}@manager.com`;
+                                    } else if (parts.length === 0 || !parts[0]) {
+                                        emailRef.current.value = ''; // Clear email if name is empty
+                                    }
+                                }
+                            }}
+                            className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 pl-12 pr-4 text-white placeholder-zinc-500 transition-all"
+                            placeholder="João Silva"
+                            type="text"
+                        />
                     </div>
                 </label>
                 <label className="flex flex-col gap-2">
@@ -140,34 +233,52 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ onCancel, onSuccess, in
                 </label>
 
                 {initialData && (
-                    <div className="flex items-center justify-between py-2">
-                        <span className="text-sm text-zinc-400">Senha de Acesso</span>
-                        <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-                        >
-                            {showPassword ? 'Cancelar Alteração de Senha' : 'Alterar Senha'}
-                        </button>
+                    <div className="flex flex-col gap-2">
+                        <label className="flex flex-col gap-2">
+                            <span className="text-white text-sm font-medium pl-1">Senha Atual</span>
+                            <div className="relative group">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={20} />
+                                <input
+                                    readOnly
+                                    defaultValue={initialData.password || "Não definida"}
+                                    className="w-full bg-zinc-900/30 border border-zinc-700 text-zinc-400 rounded-[6px] py-3.5 pl-12 pr-4 cursor-not-allowed font-mono"
+                                    type="text"
+                                />
+                            </div>
+                        </label>
+
+                        <div className="flex items-center justify-between py-2 mt-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="text-sm font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-2"
+                            >
+                                {showPassword ? (
+                                    <>Minimizar alteração</>
+                                ) : (
+                                    <>Alterar Senha de Acesso</>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 )}
 
                 {(!initialData || showPassword) && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-300 p-4 border border-zinc-800 rounded-xl bg-zinc-900/30">
                         <label className="flex flex-col gap-2">
                             <span className="text-white text-sm font-medium pl-1">
                                 {initialData ? 'Nova Senha' : 'Senha'}
                             </span>
                             <div className="relative group">
                                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors" size={20} />
-                                <input ref={passwordRef} className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 pl-12 pr-4 text-white placeholder-zinc-500 transition-all" placeholder="••••••••" type="password" />
+                                <input ref={passwordRef} className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 pl-12 pr-4 text-white placeholder-zinc-500 transition-all font-mono" placeholder="••••••••" type="text" />
                             </div>
                         </label>
                         <label className="flex flex-col gap-2">
                             <span className="text-white text-sm font-medium pl-1">Confirmar Senha</span>
                             <div className="relative group">
                                 <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors" size={20} />
-                                <input ref={confirmPasswordRef} className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 pl-12 pr-4 text-white placeholder-zinc-500 transition-all" placeholder="••••••••" type="password" />
+                                <input ref={confirmPasswordRef} className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 pl-12 pr-4 text-white placeholder-zinc-500 transition-all font-mono" placeholder="••••••••" type="text" />
                             </div>
                         </label>
                     </div>
@@ -182,37 +293,34 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ onCancel, onSuccess, in
                     <div className="relative group">
                         <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors z-10" size={20} />
                         <select ref={jobTitleRef} defaultValue={initialData?.job_title_id || ""} className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 pl-12 pr-4 text-white appearance-none cursor-pointer">
-                            <option value="">Selecione...</option>
-                            {jobTitles.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
+                            <option value="">Selecione um Cargo...</option>
+                            {jobTitles.map(jt => (
+                                <option key={jt.id} value={jt.id}>{jt.name}</option>
+                            ))}
                         </select>
                     </div>
                 </label>
 
                 <label className="flex flex-col gap-2">
-                    <span className="text-white text-sm font-medium pl-1">Nível de Permissão</span>
-                    <div className="relative">
-                        <select ref={roleRef} defaultValue={initialData?.role || "Editor"} className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 px-4 text-white appearance-none cursor-pointer">
-                            <option value="Administrador">Administrador</option>
-                            <option value="Gerente">Gerente</option>
-                            <option value="Editor">Editor</option>
-                            <option value="Visualizador">Visualizador</option>
+                    <span className="text-white text-sm font-medium pl-1">Função</span>
+                    <div className="relative group">
+                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors z-10" size={20} />
+                        <select ref={roleEnumRef} defaultValue={initialData?.role || "COMUM"} className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 pl-12 pr-4 text-white appearance-none cursor-pointer">
+                            <option value="ADMIN">Admin</option>
+                            <option value="GERENTE">Gerente</option>
+                            <option value="COMUM">Comum</option>
                         </select>
                     </div>
                 </label>
+
+                {/* Permission Level removed as per user request (All users are Admin/Level 4) */}
                 <label className="flex flex-col gap-2">
                     <span className="text-white text-sm font-medium pl-1">Origem</span>
                     <div className="relative">
                         <select ref={originRef} defaultValue={initialData?.origin || ""} className="w-full bg-zinc-900/50 border border-zinc-600 focus:border-primary focus:ring-1 focus:ring-primary rounded-[6px] py-3.5 px-4 text-white appearance-none cursor-pointer">
                             <option value="">Selecione...</option>
-                            {origins.length > 0 ? (
-                                origins.map(o => <option key={o.id} value={o.name}>{o.name}</option>)
-                            ) : (
-                                <>
-                                    <option value="Depto. Marketing">Depto. Marketing</option>
-                                    <option value="Depto. Vendas">Depto. Vendas</option>
-                                    <option value="Agência Externa">Agência Externa</option>
-                                </>
-                            )}
+                            <option value="">Selecione...</option>
+                            {origins.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
                         </select>
                     </div>
                 </label>
