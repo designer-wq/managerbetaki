@@ -142,7 +142,7 @@ const DemandsPage = () => {
       delayed: demands.filter(d => {
          const isCompleted = d.statuses?.name.toLowerCase().includes('concluído');
          if (isCompleted || !d.deadline) return false;
-         return new Date(d.deadline + 'T23:59:59') < new Date();
+         return new Date(d.deadline.split('T')[0] + 'T23:59:59') < new Date();
       }).length
    };
 
@@ -370,11 +370,11 @@ const DemandsPage = () => {
                                  <td className="px-6 py-4">
                                     <div className="flex flex-col gap-0.5">
                                        <div className="flex items-center gap-1.5 text-sm font-medium text-zinc-300">
-                                          {item.deadline ? new Date(item.deadline + 'T12:00:00').toLocaleDateString() : '-'}
+                                          {item.deadline ? new Date(item.deadline.split('T')[0] + 'T12:00:00').toLocaleDateString() : '-'}
                                        </div>
                                        {(() => {
                                           if (!item.deadline) return null;
-                                          const deadline = new Date(item.deadline + 'T12:00:00');
+                                          const deadline = new Date(item.deadline.split('T')[0] + 'T12:00:00');
                                           const now = new Date();
                                           deadline.setHours(0, 0, 0, 0);
                                           now.setHours(0, 0, 0, 0);

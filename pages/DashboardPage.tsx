@@ -311,7 +311,7 @@ const DashboardPage = () => {
                             </span>
                           </td>
                           <td className="p-4 text-sm text-white font-medium whitespace-nowrap">
-                            {demand.deadline ? new Date(demand.deadline + 'T12:00:00').toLocaleDateString() : '-'}
+                            {demand.deadline ? new Date(demand.deadline.split('T')[0] + 'T12:00:00').toLocaleDateString() : '-'}
                           </td>
                           <td className="p-4">
                             <div className="flex items-center gap-2 text-zinc-300 text-sm">

@@ -520,7 +520,7 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
                                             <p className="text-white text-sm font-medium leading-normal pb-2 flex items-center justify-between">
                                                 <span>Prazo <span className="text-red-400">*</span></span>
                                                 {initialData?.deadline && (() => {
-                                                    const deadline = new Date(initialData.deadline + 'T12:00:00');
+                                                    const deadline = new Date(initialData.deadline.split('T')[0] + 'T12:00:00');
                                                     const now = new Date();
                                                     deadline.setHours(0, 0, 0, 0);
                                                     now.setHours(0, 0, 0, 0);
