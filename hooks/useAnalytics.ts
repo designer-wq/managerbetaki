@@ -5,7 +5,7 @@ interface Demand {
     id: string;
     title: string;
     status_id: number;
-    statuses?: { name: string; color: string };
+    statuses?: { name: string; color: string; order?: number };
     priority: string; // Changed from ID/Relation to Text
     // priority_id: number; // Removed
     // priorities?: { name: string; color: string; icon: string }; // Removed
@@ -188,7 +188,13 @@ export const useAnalytics = (demands: Demand[], logs: any[], currentUser: any) =
 
 
         // 4. Manager Stats
-        const activeDemands = demands.filter(d => !['concluído', 'cancelado'].includes(d.statuses?.name?.toLowerCase() || ''));
+        const activeDemands = demands.filter(d => {
+            const name = d.statuses?.name?.toLowerCase() || '';
+            const order = d.statuses?.order;
+            const isDoneByName = ['concluído', 'concluido'].includes(name);
+            const isDoneByOrder = order === 4;
+            return !(isDoneByName || isDoneByOrder);
+        });
 
         // Status Breakout
         const statusMap: Record<string, number> = {};
@@ -202,22 +208,34 @@ export const useAnalytics = (demands: Demand[], logs: any[], currentUser: any) =
             color: name.toLowerCase().includes('atrasado') ? '#ef4444' : '#bcd200'
         }));
 
-        // Team Workload
-        const userLoadMap: Record<string, { count: number; avatar: string }> = {};
-        activeDemands.forEach(d => {
-            if (d.responsible?.name) { // Updated from profiles to responsible
-                if (!userLoadMap[d.responsible.name]) userLoadMap[d.responsible.name] = { count: 0, avatar: d.responsible.avatar_url };
-                userLoadMap[d.responsible.name].count++;
+        // Team Workload (Completion Rate)
+        const userLoadMap: Record<string, { total: number; completed: number; avatar: string }> = {};
+        
+        // Use ALL demands to calculate completion rate, not just active
+        demands.forEach(d => {
+            if (d.responsible?.name) {
+                if (!userLoadMap[d.responsible.name]) {
+                    userLoadMap[d.responsible.name] = { total: 0, completed: 0, avatar: d.responsible.avatar_url };
+                }
+                userLoadMap[d.responsible.name].total++;
+                
+                const status = d.statuses?.name?.toLowerCase() || '';
+                const isCompleted = status.includes('concluído') || status.includes('concluido');
+                if (isCompleted) {
+                    userLoadMap[d.responsible.name].completed++;
+                }
             }
         });
+
         const teamWorkload = Object.entries(userLoadMap)
             .map(([name, data]) => ({
                 name,
-                tasks: data.count,
-                capacityPct: Math.min((data.count / 10) * 100, 100), // Assuming max 10 tasks capacity
+                tasks: data.total,
+                completed: data.completed,
+                capacityPct: data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0,
                 avatar: data.avatar
             }))
-            .sort((a, b) => b.tasks - a.tasks);
+            .sort((a, b) => b.capacityPct - a.capacityPct); // Sort by highest completion rate
 
         const atRiskCount = activeDemands.filter(d =>
             (d.priority?.toLowerCase() === 'urgente' || d.priority?.toLowerCase() === 'alta') && // Updated: use string priority

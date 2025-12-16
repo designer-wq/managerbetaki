@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Header from '../components/Header';
-import { Filter, Download, Plus, Clock, AlertCircle, CheckCircle, MoreVertical, FileDown, Search, Copy, Trash2, Flag, Pencil, ArrowUpRight } from 'lucide-react';
+import { Filter, Download, Plus, Clock, AlertCircle, CheckCircle, MoreVertical, FileDown, Search, Copy, Trash2, Flag, Pencil, ArrowUpRight, Users } from 'lucide-react';
 import SlideOver from '../components/ui/SlideOver';
 import CreateDemandForm from '../components/demands/CreateDemandForm';
 import DemandTimerBadge from '../components/demands/DemandTimerBadge';
-import { fetchDemands, deleteRecord, createRecord, fetchTable } from '../lib/api';
+import { fetchDemands, deleteRecord, fetchTable, fetchProfiles, fetchAuthUsersList } from '../lib/api';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useToast } from '../components/ui/ToastContext'; // Use toast
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
@@ -28,28 +28,58 @@ const DemandsPage = () => {
    // Data State
    const [demands, setDemands] = useState<any[]>([]);
    const [statuses, setStatuses] = useState<any[]>([]);
+   const [designers, setDesigners] = useState<any[]>([]);
    const [loading, setLoading] = useState(true);
 
    // Filter State
    const [searchTerm, setSearchTerm] = useState('');
    const [selectedStatus, setSelectedStatus] = useState<string>('all');
+   const [selectedDesigner, setSelectedDesigner] = useState<string>('all');
 
-   const loadDemands = async () => {
-      setLoading(true);
-      const [demandsData, statusesData] = await Promise.all([
+   const loadDemands = React.useCallback(async (silent = false) => {
+      if (!silent) setLoading(true);
+      const [demandsData, statusesData, profilesData] = await Promise.all([
          fetchDemands(),
-         fetchTable('statuses')
+         fetchTable('statuses'),
+         fetchProfiles()
       ]);
+
+      // Sort statuses by order
+      const sortedStatuses = (statusesData || []).sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
       setDemands(demandsData || []);
-      setStatuses(statusesData || []);
-      setLoading(false);
-   };
+      setStatuses(sortedStatuses);
+      
+      // Filter only Designers using Auth Users (same as CreateDemandForm)
+      let onlyDesigners: any[] = [];
+      try {
+         const authUsers = await fetchAuthUsersList();
+         if (authUsers) {
+            onlyDesigners = authUsers.filter((u: any) =>
+               u.status === 'active' &&
+               u.job_title_name &&
+               u.job_title_name.toLowerCase().includes('designer')
+            );
+         }
+      } catch (err) {
+         console.error("Error fetching designers:", err);
+         // Fallback to profiles if RPC fails
+         onlyDesigners = (profilesData || []).filter((p: any) => 
+            p.job_title?.toLowerCase().includes('designer') || 
+            p.job_title_name?.toLowerCase().includes('designer') ||
+            p.role === 'DESIGNER'
+         );
+      }
+      setDesigners(onlyDesigners);
+      
+      if (!silent) setLoading(false);
+   }, []);
 
    useEffect(() => {
       loadDemands();
-   }, []);
+   }, [loadDemands]);
 
-   useRealtimeSubscription(['demands'], loadDemands);
+   useRealtimeSubscription(['demands'], () => loadDemands(true));
 
    const handleDeleteDemand = async (id: string) => {
       try {
@@ -153,8 +183,9 @@ const DemandsPage = () => {
          d.responsible?.name?.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus = selectedStatus === 'all' || d.status_id?.toString() === selectedStatus;
+      const matchesDesigner = selectedDesigner === 'all' || d.responsible_id === selectedDesigner;
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesDesigner;
    });
 
    const toggleMenu = (e: React.MouseEvent, item: any) => {
@@ -260,6 +291,30 @@ const DemandsPage = () => {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                      />
+                  </div>
+
+                  {/* Designer Filter */}
+                  <div className="w-full md:w-64">
+                     <div className="relative">
+                        <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={20} />
+                        <select
+                           value={selectedDesigner}
+                           onChange={(e) => setSelectedDesigner(e.target.value)}
+                           className="w-full appearance-none bg-zinc-900/50 border border-zinc-700/50 rounded-[6px] py-3 pl-10 pr-8 text-sm text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer"
+                        >
+                           <option value="all">Todos os Designers</option>
+                           {designers.map(d => (
+                              <option key={d.id} value={d.id}>
+                                 {d.name}
+                              </option>
+                           ))}
+                        </select>
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                           <svg className="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                           </svg>
+                        </div>
+                     </div>
                   </div>
 
                   {/* Status Filter */}

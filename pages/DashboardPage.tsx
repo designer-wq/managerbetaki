@@ -28,21 +28,21 @@ const DashboardPage = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = React.useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     const data = await fetchDemands();
     if (data) {
       setDemands(data);
       calculateStats(data);
     }
-    setLoading(false);
-  };
+    if (!silent) setLoading(false);
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
-  useRealtimeSubscription(['demands'], loadData);
+  useRealtimeSubscription(['demands'], () => loadData(true));
 
   const calculateStats = (data: any[]) => {
     // 1. Total Active (assuming all fetched are active for now, or filter by status)
@@ -58,13 +58,15 @@ const DashboardPage = () => {
       ['Atrasado', 'Urgente', 'Crítico'].includes(d.statuses?.name)
     ).length;
 
-    // 3. Workload (Unique profiles assigned)
-    const uniqueDesigners = new Set(data.filter(d => d.responsible?.name).map(d => d.responsible.name)).size;
-    // Mocking a "capacity" calc: (Total Demands / (Unique Designers * 5)) * 100 ?
-    // Let's just hardcode 85% or use dynamic if possible.
-    // Using a simple metric: demands per designer avg.
-    // For visual consistency with previous design, keeping 85% static or slightly dynamic.
-    const workload = uniqueDesigners > 0 ? Math.min(Math.round((data.length / (uniqueDesigners * 10)) * 100), 100) : 0;
+    // 3. Workload (Completion Rate)
+    // Logic: (Completed / Total) * 100
+    const completedCount = data.filter(d => 
+       ['concluído', 'concluido'].includes(d.statuses?.name?.toLowerCase())
+    ).length;
+    
+    const workload = data.length > 0 
+       ? Math.round((completedCount / data.length) * 100) 
+       : 0;
 
 
     // 4. Weekly Volume (Mon-Sun)

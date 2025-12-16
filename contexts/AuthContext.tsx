@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabase';
+import { Route, useNavigate } from 'react-router-dom';
 
 interface UserProfile {
     id: string;
@@ -32,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<any | null>(null);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
-
+const navigate = useNavigate();
     useEffect(() => {
         const fetchSession = async () => {
             const supabase = getSupabase();
@@ -67,6 +68,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     origin: metadata.origin || pd.origin || '',
                     job_titles: pd.job_titles
                 });
+            } else {
+                setProfile(null);
+                navigate('/login'); 
+                return;
             }
 
             setLoading(false);

@@ -4,11 +4,12 @@ import { Clock, CheckCircle, AlertTriangle, Layers, TrendingUp } from 'lucide-re
 
 interface DesignerReportsProps {
     stats: any;
+    showPersonal?: boolean;
 }
 
 const COLORS = ['#bcd200', '#ffffff', '#52525b', '#a1a1aa'];
 
-const DesignerReports: React.FC<DesignerReportsProps> = ({ stats }) => {
+const DesignerReports: React.FC<DesignerReportsProps> = ({ stats, showPersonal = true }) => {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* 1. Insights Banner */}
@@ -39,13 +40,15 @@ const DesignerReports: React.FC<DesignerReportsProps> = ({ stats }) => {
                     </div>
                 </div>
 
-                <div className="card-enterprise p-5 flex flex-col gap-2">
-                    <span className="text-zinc-400 text-xs font-medium uppercase">SLA Pessoal</span>
-                    <div className="flex items-center gap-3">
-                        <Clock size={28} className={stats.slaCompliance >= 90 ? "text-green-500" : "text-yellow-500"} />
-                        <span className="text-3xl font-bold text-white">{stats.slaCompliance}%</span>
+                {showPersonal && (
+                    <div className="card-enterprise p-5 flex flex-col gap-2">
+                        <span className="text-zinc-400 text-xs font-medium uppercase">SLA Pessoal</span>
+                        <div className="flex items-center gap-3">
+                            <Clock size={28} className={stats.slaCompliance >= 90 ? "text-green-500" : "text-yellow-500"} />
+                            <span className="text-3xl font-bold text-white">{stats.slaCompliance}%</span>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 <div className="card-enterprise p-5 flex flex-col gap-2">
                     <span className="text-zinc-400 text-xs font-medium uppercase">Lead Time Médio</span>

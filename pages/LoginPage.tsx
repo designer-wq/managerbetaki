@@ -8,6 +8,8 @@ interface Profile {
     email: string;
     avatar_url: string | null;
     job_title: string | null;
+    job_title_name?: string | null;
+    role_name?: string | null;
     role: string;
 }
 
@@ -147,14 +149,14 @@ const LoginPage = () => {
                                                         </span>
                                                     )}
                                                 </div>
-                                                {/* Role Badge */}
-                                                <div className={`absolute -bottom-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-sm left-1/2 -translate-x-1/2 whitespace-nowrap ${getRoleColor(profile.role)}`}>
-                                                    {profile.job_title || profile.role}
+                                                {/* Cargo Badge (faixa verde sempre) */}
+                                                <div className="absolute -bottom-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-sm left-1/2 -translate-x-1/2 whitespace-nowrap bg-primary text-zinc-900 border-primary">
+                                                    {(profile.job_title_name || profile.job_title || '').trim() || 'Sem cargo'}
                                                 </div>
                                             </div>
                                             <div className="flex flex-col items-center gap-1">
                                                 <span className="text-lg font-medium text-white group-hover:text-primary transition-colors line-clamp-1">{profile.name}</span>
-                                                <span className="text-xs text-zinc-500">{profile.role}</span>
+                                                <span className="text-xs text-zinc-500">{(profile.role_name || profile.role || '').trim() || 'Sem função'}</span>
                                             </div>
                                         </button>
                                     ))}

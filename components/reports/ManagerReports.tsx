@@ -53,9 +53,9 @@ const ManagerReports: React.FC<ManagerReportsProps> = ({ stats }) => {
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-white font-bold flex items-center gap-2">
                             <User size={20} className="text-[#bcd200]" />
-                            Carga da Equipe
+                            Produtividade da Equipe
                         </h3>
-                        <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-1 rounded">Capacidade Estimada: 10 tarefas/un</span>
+                        <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-1 rounded">Taxa de Conclusão</span>
                     </div>
 
                     <div className="space-y-4">
@@ -71,14 +71,15 @@ const ManagerReports: React.FC<ManagerReportsProps> = ({ stats }) => {
                                 <div className="flex-1">
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-white font-medium text-sm">{user.name}</span>
-                                        <span className="text-zinc-400 text-xs">{user.tasks} tarefas ({Math.round(user.capacityPct)}%)</span>
+                                        <span className="text-zinc-400 text-xs">{user.completed}/{user.tasks} concluídas ({Math.round(user.capacityPct)}%)</span>
                                     </div>
                                     <div className="h-2.5 w-full bg-zinc-800 rounded-full overflow-hidden">
                                         <div
-                                            className={`h-full rounded-full transition-all duration-500 ${user.capacityPct > 100 ? 'bg-red-500' :
-                                                user.capacityPct > 80 ? 'bg-orange-500' :
-                                                    'bg-[#bcd200]'
-                                                }`}
+                                            className={`h-full rounded-full transition-all duration-500 ${
+                                                user.capacityPct >= 80 ? 'bg-[#bcd200]' :
+                                                user.capacityPct >= 50 ? 'bg-orange-500' :
+                                                'bg-red-500'
+                                            }`}
                                             style={{ width: `${Math.min(user.capacityPct, 100)}%` }}
                                         ></div>
                                     </div>

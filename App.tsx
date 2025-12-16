@@ -26,9 +26,9 @@ import { PermissionsProvider } from './contexts/PermissionsContext';
 const App = () => {
   return (
     <ToastProvider>
+      <Router>
       <AuthProvider>
         <PermissionsProvider>
-          <Router>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
 
@@ -46,9 +46,9 @@ const App = () => {
                 <Route path="/settings" element={<div className="p-10 text-white">Settings Page Placeholder</div>} />
               </Route>
             </Routes>
-          </Router>
         </PermissionsProvider>
       </AuthProvider>
+      </Router>
     </ToastProvider>
   );
 };
