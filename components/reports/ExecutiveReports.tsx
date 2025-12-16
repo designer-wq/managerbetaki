@@ -60,12 +60,6 @@ const ExecutiveReports: React.FC<ExecutiveReportsProps> = ({
                         {monthNames.current} (Atual)
                     </button>
                     <button 
-                        onClick={() => setActiveTab('previous')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'previous' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
-                    >
-                        {monthNames.previous} (Anterior)
-                    </button>
-                    <button 
                         onClick={() => setActiveTab('comparison')}
                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'comparison' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
                     >
@@ -197,81 +191,29 @@ const ExecutiveReports: React.FC<ExecutiveReportsProps> = ({
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-zinc-500 uppercase bg-zinc-800/50">
-                                <tr>
-                                    <th className="px-4 py-3 rounded-l-lg">Indicador</th>
-                                    <th className="px-4 py-3 text-right">{monthNames.previous}</th>
-                                    <th className="px-4 py-3 text-right">{monthNames.current}</th>
-                                    <th className="px-4 py-3 text-right rounded-r-lg">Variação</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-800/50">
-                                <tr className="group hover:bg-zinc-800/30 transition-colors">
-                                    <td className="px-4 py-4 font-medium text-zinc-300">Demandas Criadas</td>
-                                    <td className="px-4 py-4 text-right text-zinc-400">{monthlyComparison.created.previous}</td>
-                                    <td className="px-4 py-4 text-right text-white font-bold">{monthlyComparison.created.current}</td>
-                                    <td className="px-4 py-4 text-right">
-                                        {(() => {
-                                            const v = calculateVariation(monthlyComparison.created.current, monthlyComparison.created.previous);
-                                            return (
-                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded ${v > 0 ? 'bg-green-500/10 text-green-400' : v < 0 ? 'bg-red-500/10 text-red-400' : 'bg-zinc-800 text-zinc-400'}`}>
-                                                    {v > 0 ? '+' : ''}{v}%
-                                                </span>
-                                            );
-                                        })()}
-                                    </td>
-                                </tr>
-                                <tr className="group hover:bg-zinc-800/30 transition-colors">
-                                    <td className="px-4 py-4 font-medium text-zinc-300">Entregas Realizadas</td>
-                                    <td className="px-4 py-4 text-right text-zinc-400">{monthlyComparison.completed.previous}</td>
-                                    <td className="px-4 py-4 text-right text-white font-bold">{monthlyComparison.completed.current}</td>
-                                    <td className="px-4 py-4 text-right">
-                                        {(() => {
-                                            const v = calculateVariation(monthlyComparison.completed.current, monthlyComparison.completed.previous);
-                                            return (
-                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded ${v > 0 ? 'bg-green-500/10 text-green-400' : v < 0 ? 'bg-red-500/10 text-red-400' : 'bg-zinc-800 text-zinc-400'}`}>
-                                                    {v > 0 ? '+' : ''}{v}%
-                                                </span>
-                                            );
-                                        })()}
-                                    </td>
-                                </tr>
-                                <tr className="group hover:bg-zinc-800/30 transition-colors">
-                                    <td className="px-4 py-4 font-medium text-zinc-300">SLA Global</td>
-                                    <td className="px-4 py-4 text-right text-zinc-400">{monthlyComparison.sla.previous}%</td>
-                                    <td className="px-4 py-4 text-right text-white font-bold">{monthlyComparison.sla.current}%</td>
-                                    <td className="px-4 py-4 text-right">
-                                        {(() => {
-                                            const v = monthlyComparison.sla.current - monthlyComparison.sla.previous; // Absolute diff for percentage
-                                            return (
-                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded ${v > 0 ? 'bg-green-500/10 text-green-400' : v < 0 ? 'bg-red-500/10 text-red-400' : 'bg-zinc-800 text-zinc-400'}`}>
-                                                    {v > 0 ? '+' : ''}{v.toFixed(1)}%
-                                                </span>
-                                            );
-                                        })()}
-                                    </td>
-                                </tr>
-                                <tr className="group hover:bg-zinc-800/30 transition-colors">
-                                    <td className="px-4 py-4 font-medium text-zinc-300">Lead Time Médio</td>
-                                    <td className="px-4 py-4 text-right text-zinc-400">{monthlyComparison.leadTime.previous} min</td>
-                                    <td className="px-4 py-4 text-right text-white font-bold">{monthlyComparison.leadTime.current} min</td>
-                                    <td className="px-4 py-4 text-right">
-                                        {(() => {
-                                            const v = calculateVariation(monthlyComparison.leadTime.current, monthlyComparison.leadTime.previous);
-                                            // Lower lead time is better (Green if negative)
-                                            const isGood = v < 0;
-                                            return (
-                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded ${isGood ? 'bg-green-500/10 text-green-400' : v > 0 ? 'bg-red-500/10 text-red-400' : 'bg-zinc-800 text-zinc-400'}`}>
-                                                    {v > 0 ? '+' : ''}{v}%
-                                                </span>
-                                            );
-                                        })()}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div className="h-80 w-full mt-4">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                                data={[
+                                    { name: 'Criadas', current: monthlyComparison.created.current, previous: monthlyComparison.created.previous },
+                                    { name: 'Entregas', current: monthlyComparison.completed.current, previous: monthlyComparison.completed.previous },
+                                    { name: 'SLA (%)', current: monthlyComparison.sla.current, previous: monthlyComparison.sla.previous },
+                                    { name: 'Lead (min)', current: monthlyComparison.leadTime.current, previous: monthlyComparison.leadTime.previous },
+                                ]}
+                                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                            >
+                                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                                <XAxis dataKey="name" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
+                                <Tooltip
+                                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                    contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff' }}
+                                    labelStyle={{ color: '#a1a1aa', marginBottom: '0.5rem' }}
+                                />
+                                <Bar dataKey="previous" name={monthNames.previous} fill="#3f3f46" radius={[4, 4, 0, 0]} barSize={40} />
+                                <Bar dataKey="current" name={monthNames.current} fill="#bcd200" radius={[4, 4, 0, 0]} barSize={40} />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             )}
