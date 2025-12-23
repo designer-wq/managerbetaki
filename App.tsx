@@ -9,6 +9,7 @@ import CreateUserPage from './pages/CreateUserPage';
 import LoginPage from './pages/LoginPage';
 import ConfigPage from './pages/ConfigPage';
 import RegistersPage from './pages/RegistersPage';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 const Layout = () => {
   return (
@@ -33,17 +34,19 @@ const App = () => {
               <Route path="/login" element={<LoginPage />} />
 
               {/* Authenticated Routes */}
-              <Route element={<Layout />}>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/demands" element={<DemandsPage />} />
-                <Route path="/demands/new" element={<CreateDemandPage />} />
-                <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/users" element={<CreateUserPage />} />
-                <Route path="/config" element={<ConfigPage />} />
-                <Route path="/registers" element={<RegistersPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<Layout />}>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/demands" element={<DemandsPage />} />
+                  <Route path="/demands/new" element={<CreateDemandPage />} />
+                  <Route path="/reports" element={<ReportsPage />} />
+                  <Route path="/users" element={<CreateUserPage />} />
+                  <Route path="/config" element={<ConfigPage />} />
+                  <Route path="/registers" element={<RegistersPage />} />
 
-                {/* Fallbacks for demo purposes */}
-                <Route path="/settings" element={<div className="p-10 text-white">Settings Page Placeholder</div>} />
+                  {/* Fallbacks for demo purposes */}
+                  <Route path="/settings" element={<div className="p-10 text-white">Settings Page Placeholder</div>} />
+                </Route>
               </Route>
             </Routes>
         </PermissionsProvider>

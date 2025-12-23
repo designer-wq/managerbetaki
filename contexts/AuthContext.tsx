@@ -1,123 +1,118 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getSupabase } from '../lib/supabase';
-import { Route, useNavigate } from 'react-router-dom';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { getSupabase } from "../lib/supabase";
 
 interface UserProfile {
-    id: string;
-    email: string;
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  permission_level: string;
+  origin?: string;
+  avatar_url?: string;
+  job_titles?: {
     name: string;
-    role: string;
-    permission_level: string;
-    origin?: string;
-    avatar_url?: string;
-    job_titles?: {
-        name: string;
-    };
+  };
 }
 
 interface AuthContextType {
-    user: any | null;
-    profile: UserProfile | null;
-    loading: boolean;
-    isAdmin: boolean;
+  user: any | null;
+  profile: UserProfile | null;
+  loading: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
-    user: null,
-    profile: null,
-    loading: true,
-    isAdmin: false
+  user: null,
+  profile: null,
+  loading: true,
+  isAdmin: false,
 });
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<any | null>(null);
-    const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [loading, setLoading] = useState(true);
-const navigate = useNavigate();
-    useEffect(() => {
-        const fetchSession = async () => {
-            const supabase = getSupabase();
-            if (!supabase) {
-                setLoading(false);
-                return;
-            }
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [user, setUser] = useState<any | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
 
-            const { data: { session } } = await supabase.auth.getSession();
-            setUser(session?.user || null);
+    let authSubscription: { unsubscribe: () => void } | null = null;
 
-            if (session?.user) {
-                // Fetch extra data (Job Title Name) that might not be in metadata
-                const { data: profileData } = await supabase
-                    .from('profiles')
-                    .select('*, job_titles(name)')
-                    .eq('id', session.user.id)
-                    .single();
+    const updateProfile = async (session: any) => {
+      setUser(session?.user || null);
 
-                // Merge: Metadata takes precedence for core fields (Source of Truth)
-                const metadata = session.user.user_metadata || {};
-                const pd: any = profileData || {};
+      if (session?.user) {
+        // Fetch extra data (Job Title Name) that might not be in metadata
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*, job_titles(name)")
+          .eq("id", session.user.id)
+          .single();
 
-                // Safe merge
-                setProfile({
-                    ...(pd),
-                    id: session.user.id,
-                    email: session.user.email || '',
-                    name: metadata.name || pd.name || session.user.email?.split('@')[0] || 'User',
-                    role: metadata.role || pd.role || 'Colaborador',
-                    permission_level: metadata.permission_level || pd.permission_level || '1',
-                    origin: metadata.origin || pd.origin || '',
-                    job_titles: pd.job_titles
-                });
-            } else {
-                setProfile(null);
-                navigate('/login'); 
-                return;
-            }
+        // Merge: Metadata takes precedence for core fields (Source of Truth)
+        const metadata = session.user.user_metadata || {};
+        const pd: any = profileData || {};
 
-            setLoading(false);
+        // Safe merge
+        setProfile({
+          ...pd,
+          id: session.user.id,
+          email: session.user.email || "",
+          name:
+            metadata.name ||
+            pd.name ||
+            session.user.email?.split("@")[0] ||
+            "User",
+          role: metadata.role || pd.role || "Colaborador",
+          permission_level:
+            metadata.permission_level || pd.permission_level || "1",
+          origin: metadata.origin || pd.origin || "",
+          job_titles: pd.job_titles,
+        });
+      }
+    };
 
-            const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-                setUser(session?.user || null);
-                if (session?.user) {
-                    const { data: profileData } = await supabase
-                        .from('profiles')
-                        .select('*, job_titles(name)')
-                        .eq('id', session.user.id)
-                        .single();
+    const initAuth = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        await updateProfile(session);
 
-                    const metadata = session.user.user_metadata || {};
-                    const pd: any = profileData || {};
+      } catch (error) {
+        console.error("Error initializing auth:", error);
+      } finally {
+        setLoading(false);
+      }
 
-                    setProfile({
-                        ...(pd),
-                        id: session.user.id,
-                        email: session.user.email || '',
-                        name: metadata.name || pd.name || session.user.email?.split('@')[0] || 'User',
-                        role: metadata.role || pd.role || 'Colaborador',
-                        permission_level: metadata.permission_level || pd.permission_level || '1',
-                        origin: metadata.origin || pd.origin || '',
-                        job_titles: pd.job_titles
-                    });
-                } else {
-                    setProfile(null);
-                }
-            });
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        updateProfile(session);
+      });
+      authSubscription = data.subscription;
+    };
 
-            return () => {
-                subscription.unsubscribe();
-            };
-        };
+    initAuth();
 
-        fetchSession();
-    }, []);
+    return () => {
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
+    };
+  }, []);
 
-    const isAdmin = profile?.permission_level === '4';
+  const isAdmin = profile?.permission_level === "4";
 
-    return (
-        <AuthContext.Provider value={{ user, profile, loading, isAdmin }}>
-            {children}
-        </AuthContext.Provider>
-    );
+  return (
+    <AuthContext.Provider value={{ user, profile, loading, isAdmin }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => useContext(AuthContext);
