@@ -1,4 +1,4 @@
-import{n as s}from"./index-Drz-DYtp.js";const m=async e=>{const t=s();if(t)try{await t.from("logs").insert([e])}catch(r){console.error("Failed to log action:",r)}},y=async e=>{const t=s();if(!t)return[];let{data:r,error:o}=await t.from(e).select("*").order("created_at",{ascending:!1});if(o){const n=await t.from(e).select("*");return n.error?(console.error(`Error fetching ${e}:`,n.error),[]):n.data||[]}return r||[]},w=async()=>{const e=s();if(!e)return[];const{data:t,error:r}=await e.from("demands").select(`
+import{n as s}from"./index-ScYx21Cm.js";const m=async e=>{const t=s();if(t)try{await t.from("logs").insert([e])}catch(r){console.error("Failed to log action:",r)}},y=async e=>{const t=s();if(!t)return[];let{data:r,error:o}=await t.from(e).select("*").order("created_at",{ascending:!1});if(o){const n=await t.from(e).select("*");return n.error?(console.error(`Error fetching ${e}:`,n.error),[]):n.data||[]}return r||[]},w=async()=>{const e=s();if(!e)return[];const{data:t,error:r}=await e.from("demands").select(`
             *,
             origins ( name ),
             demand_types ( name ),
