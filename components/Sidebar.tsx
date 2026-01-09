@@ -15,12 +15,14 @@ import {
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useAlerts } from '../contexts/AlertsContext';
 import { getSupabase } from '../lib/supabase';
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user: authUser, profile } = useAuth();
+  const { demandsAlertCount, passwordsAlertCount } = useAlerts();
   const [appLogo, setAppLogo] = useState('/logo.png');
   const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -163,7 +165,22 @@ const Sidebar = () => {
                   className={`transition-colors shrink-0 ${isActive ? 'text-[#bcd200]' : 'group-hover:text-zinc-300'}`}
                 />
                 {!isCollapsed && <span className="truncate">{item.label}</span>}
-                {isActive && (
+
+                {/* Alert Badge for Demands */}
+                {item.path === '/demands' && demandsAlertCount > 0 && (
+                  <span className={`${isCollapsed ? 'absolute -top-1 -right-1' : 'ml-auto'} flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold rounded-full bg-amber-500 text-black animate-pulse`}>
+                    {demandsAlertCount}
+                  </span>
+                )}
+
+                {/* Alert Badge for Passwords */}
+                {item.path === '/passwords' && passwordsAlertCount > 0 && (
+                  <span className={`${isCollapsed ? 'absolute -top-1 -right-1' : 'ml-auto'} flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold rounded-full bg-amber-500 text-black animate-pulse`}>
+                    {passwordsAlertCount}
+                  </span>
+                )}
+
+                {isActive && !(item.path === '/demands' && demandsAlertCount > 0) && !(item.path === '/passwords' && passwordsAlertCount > 0) && (
                   <div className={`absolute ${isCollapsed ? 'top-2 right-2' : 'right-2'} w-1.5 h-1.5 rounded-full bg-[#bcd200] shadow-[0_0_8px_rgba(188,210,0,0.5)]`}></div>
                 )}
               </Link>

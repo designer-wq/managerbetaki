@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAlerts } from '../../contexts/AlertsContext';
 import { getSupabase } from '../../lib/supabase';
 
 interface MobileSidebarProps {
@@ -22,6 +23,7 @@ const MobileSidebar: React.FC<MobileSidebarProps> = ({ isOpen, onClose }) => {
     const location = useLocation();
     const navigate = useNavigate();
     const { user: authUser, profile } = useAuth();
+    const { demandsAlertCount, passwordsAlertCount } = useAlerts();
     const [appLogo, setAppLogo] = useState('/logo.png');
 
     const user = profile || (authUser ? {
@@ -138,6 +140,20 @@ const MobileSidebar: React.FC<MobileSidebarProps> = ({ isOpen, onClose }) => {
                                     className={isActive ? 'text-primary' : ''}
                                 />
                                 <span>{item.label}</span>
+
+                                {/* Alert Badge for Demands */}
+                                {item.path === '/demands' && demandsAlertCount > 0 && (
+                                    <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold rounded-full bg-amber-500 text-black animate-pulse">
+                                        {demandsAlertCount}
+                                    </span>
+                                )}
+
+                                {/* Alert Badge for Passwords */}
+                                {item.path === '/passwords' && passwordsAlertCount > 0 && (
+                                    <span className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold rounded-full bg-amber-500 text-black animate-pulse">
+                                        {passwordsAlertCount}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

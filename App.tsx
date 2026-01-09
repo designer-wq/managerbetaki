@@ -21,6 +21,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { NotificationsProvider } from './contexts/NotificationsContext';
+import { AlertsProvider } from './contexts/AlertsContext';
 
 // Professional Features
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -86,90 +87,92 @@ const App = () => {
             <AuthProvider>
               <PermissionsProvider>
                 <NotificationsProvider>
-                  <SidebarProvider>
-                    <Routes>
-                      <Route path="/login" element={<LoginPage />} />
+                  <AlertsProvider>
+                    <SidebarProvider>
+                      <Routes>
+                        <Route path="/login" element={<LoginPage />} />
 
-                      {/* Authenticated Routes */}
-                      <Route element={<ProtectedRoute />}>
-                        <Route element={<LayoutWithFeatures />}>
-                          {/* Dashboard - uses 'dashboard' permission */}
-                          <Route path="/" element={
-                            <PermissionRoute resource="dashboard">
-                              <DashboardPage />
-                            </PermissionRoute>
-                          } />
+                        {/* Authenticated Routes */}
+                        <Route element={<ProtectedRoute />}>
+                          <Route element={<LayoutWithFeatures />}>
+                            {/* Dashboard - uses 'dashboard' permission */}
+                            <Route path="/" element={
+                              <PermissionRoute resource="dashboard">
+                                <DashboardPage />
+                              </PermissionRoute>
+                            } />
 
-                          {/* Demands - uses 'demands' permission */}
-                          <Route path="/demands" element={
-                            <PermissionRoute resource="demands">
-                              <DemandsPage />
-                            </PermissionRoute>
-                          } />
-                          <Route path="/demands/new" element={
-                            <PermissionRoute resource="demands" action="edit">
-                              <CreateDemandPage />
-                            </PermissionRoute>
-                          } />
+                            {/* Demands - uses 'demands' permission */}
+                            <Route path="/demands" element={
+                              <PermissionRoute resource="demands">
+                                <DemandsPage />
+                              </PermissionRoute>
+                            } />
+                            <Route path="/demands/new" element={
+                              <PermissionRoute resource="demands" action="edit">
+                                <CreateDemandPage />
+                              </PermissionRoute>
+                            } />
 
-                          {/* Team - uses 'team' permission */}
-                          <Route path="/users" element={
-                            <PermissionRoute resource="team">
-                              <CreateUserPage />
-                            </PermissionRoute>
-                          } />
+                            {/* Team - uses 'team' permission */}
+                            <Route path="/users" element={
+                              <PermissionRoute resource="team">
+                                <CreateUserPage />
+                              </PermissionRoute>
+                            } />
 
-                          {/* Registers - uses 'registers' permission */}
-                          <Route path="/registers" element={
-                            <PermissionRoute resource="registers">
-                              <RegistersPage />
-                            </PermissionRoute>
-                          } />
+                            {/* Registers - uses 'registers' permission */}
+                            <Route path="/registers" element={
+                              <PermissionRoute resource="registers">
+                                <RegistersPage />
+                              </PermissionRoute>
+                            } />
 
-                          {/* Files - uses 'demands' permission */}
-                          <Route path="/files" element={
-                            <PermissionRoute resource="demands">
-                              <FilesPage />
-                            </PermissionRoute>
-                          } />
+                            {/* Files - uses 'demands' permission */}
+                            <Route path="/files" element={
+                              <PermissionRoute resource="demands">
+                                <FilesPage />
+                              </PermissionRoute>
+                            } />
 
-                          {/* Config Routes - uses 'config' permission */}
-                          <Route path="/config" element={
-                            <PermissionRoute resource="config">
-                              <ConfigPage />
-                            </PermissionRoute>
-                          } />
+                            {/* Config Routes - uses 'config' permission */}
+                            <Route path="/config" element={
+                              <PermissionRoute resource="config">
+                                <ConfigPage />
+                              </PermissionRoute>
+                            } />
 
-                          {/* Passwords - Admin only (uses 'config' permission as admin check) */}
-                          <Route path="/passwords" element={
-                            <PermissionRoute resource="config" action="edit">
-                              <PasswordsPage />
-                            </PermissionRoute>
-                          } />
+                            {/* Passwords - Admin only (uses 'config' permission as admin check) */}
+                            <Route path="/passwords" element={
+                              <PermissionRoute resource="config" action="edit">
+                                <PasswordsPage />
+                              </PermissionRoute>
+                            } />
 
-                          {/* Seasonal Calendar - available to all authenticated users */}
-                          <Route path="/seasonal-calendar" element={<SeasonalCalendarPage />} />
+                            {/* Seasonal Calendar - available to all authenticated users */}
+                            <Route path="/seasonal-calendar" element={<SeasonalCalendarPage />} />
 
-                          {/* Designer Report - uses 'dashboard' permission */}
-                          <Route path="/designer-report" element={
-                            <PermissionRoute resource="dashboard">
-                              <DesignerReportPage />
-                            </PermissionRoute>
-                          } />
+                            {/* Designer Report - uses 'dashboard' permission */}
+                            <Route path="/designer-report" element={
+                              <PermissionRoute resource="dashboard">
+                                <DesignerReportPage />
+                              </PermissionRoute>
+                            } />
 
-                          {/* Capacity Calendar - uses 'dashboard' permission */}
-                          <Route path="/capacity-calendar" element={
-                            <PermissionRoute resource="dashboard">
-                              <CapacityCalendarPage />
-                            </PermissionRoute>
-                          } />
+                            {/* Capacity Calendar - uses 'dashboard' permission */}
+                            <Route path="/capacity-calendar" element={
+                              <PermissionRoute resource="dashboard">
+                                <CapacityCalendarPage />
+                              </PermissionRoute>
+                            } />
 
-                          {/* Fallbacks for demo purposes */}
-                          <Route path="/settings" element={<div className="p-10 text-white">Settings Page Placeholder</div>} />
+                            {/* Fallbacks for demo purposes */}
+                            <Route path="/settings" element={<div className="p-10 text-white">Settings Page Placeholder</div>} />
+                          </Route>
                         </Route>
-                      </Route>
-                    </Routes>
-                  </SidebarProvider>
+                      </Routes>
+                    </SidebarProvider>
+                  </AlertsProvider>
                 </NotificationsProvider>
               </PermissionsProvider>
             </AuthProvider>
