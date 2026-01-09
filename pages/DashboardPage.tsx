@@ -29,6 +29,7 @@ import { fetchDemands } from "../lib/api";
 import { useRealtimeSubscription } from "../hooks/useRealtimeSubscription";
 import { Skeleton } from "../components/ui/Skeleton";
 import { useAuth } from "../contexts/AuthContext";
+import DesignerGoals from "../components/designer/DesignerGoals";
 
 // Simple empty state component (replaces ReportEmptyState)
 const EmptyState = ({ title, description }: { title: string; description: string }) => (
@@ -183,19 +184,13 @@ const DashboardPage = () => {
     const nextMonth = nextMonthDate.getMonth();
     const nextYear = nextMonthDate.getFullYear();
 
-    // Helper to check if "Completed" (New Definition)
+    // Helper to check if "Completed" - Only: Concluído, Postar, Agendado
     const isCompletedStatus = (statusName: string) => {
       const s = statusName?.toLowerCase() || '';
       return (
-        s.includes('conclu') ||
-        s.includes('agendado') ||
-        s.includes('postar') ||
-        s.includes('ag.odds') ||
-        s.includes('ag,odds') ||
-        s.includes('ag. odds') ||
-        s.includes('ap.gerente') ||
-        s.includes('ap. gerente') ||
-        s.includes('gerente')
+        s.includes('conclu') ||      // Concluído
+        s.includes('agendado') ||    // Agendado
+        s.includes('postar')         // Postar
       );
     };
 
@@ -239,7 +234,7 @@ const DashboardPage = () => {
     }).length;
     const nextWorkload = nextTotal > 0 ? Math.round((nextCompleted / nextTotal) * 100) : 0;
 
-    // 4. Weekly Volume (Current Week: Mon-Sun)
+    // 4. Weekly Volume (Current Week: Mon-Sun) - Based on DEADLINE for completed demands
     const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
     const weeklyMap = new Array(7).fill(0);
     const lastWeeklyMap = new Array(7).fill(0);
@@ -267,19 +262,22 @@ const DashboardPage = () => {
       const s = d.statuses?.name?.toLowerCase() || '';
       const isDone = isCompletedStatus(s); // Use helper
 
-      const dateStr = d.updated_at; // Strict Check: we populated updated_at for historical data
-      if (!dateStr) return; // Ignore if no updated_at (should not happen for completed/delivered items now)
+      // Use DEADLINE instead of updated_at for weekly volume
+      const deadlineStr = d.deadline;
+      if (!deadlineStr) return; // Ignore if no deadline
 
-      const date = new Date(dateStr);
+      // Parse deadline correctly (format: YYYY-MM-DD or ISO string)
+      const deadlineDate = new Date(deadlineStr.split('T')[0] + 'T12:00:00');
 
+      // Only count if the demand is COMPLETED and has a deadline in the target week
       if (isDone) {
-        if (date >= startOfWeek && date <= endOfWeek) {
-          const dayIdx = date.getDay();
+        if (deadlineDate >= startOfWeek && deadlineDate <= endOfWeek) {
+          const dayIdx = deadlineDate.getDay();
           weeklyMap[dayIdx]++;
         }
-        else if (date >= startOfLastWeek && date <= endOfLastWeek) {
+        else if (deadlineDate >= startOfLastWeek && deadlineDate <= endOfLastWeek) {
           lastWeekCount++;
-          const dayIdx = date.getDay();
+          const dayIdx = deadlineDate.getDay();
           lastWeeklyMap[dayIdx]++;
         }
       }
@@ -371,20 +369,20 @@ const DashboardPage = () => {
     const offset = targetDayIndex === 0 ? 6 : targetDayIndex - 1;
     targetDate.setDate(targetDate.getDate() + offset);
 
-    // Filter demands for this date
+    // Filter demands for this date - using DEADLINE instead of updated_at
     const dayItems = demands.filter(d => {
       // Must be completed
       const s = d.statuses?.name || '';
       if (!statsWrapper.isCompletedStatus(s)) return false;
 
-      // Check date match (Local Day)
-      const dateStr = d.updated_at;
-      if (!dateStr) return false;
+      // Check deadline date match (using deadline now)
+      const deadlineStr = d.deadline;
+      if (!deadlineStr) return false;
 
-      const dDate = new Date(dateStr);
-      return dDate.getDate() === targetDate.getDate() &&
-        dDate.getMonth() === targetDate.getMonth() &&
-        dDate.getFullYear() === targetDate.getFullYear();
+      const deadlineDate = new Date(deadlineStr.split('T')[0] + 'T12:00:00');
+      return deadlineDate.getDate() === targetDate.getDate() &&
+        deadlineDate.getMonth() === targetDate.getMonth() &&
+        deadlineDate.getFullYear() === targetDate.getFullYear();
     });
 
     setSelectedDayDemands({
@@ -393,22 +391,15 @@ const DashboardPage = () => {
     });
   };
 
-  // Helper Wrapper to access isCompletedStatus outside calculateStats (or duplicate it)
-  // Since isCompletedStatus was internal to calculateStats, let's redefine it or move it up.
-  // We'll define a robust one here for the handleBarClick
+  // Helper Wrapper to access isCompletedStatus outside calculateStats
+  // Only: Concluído, Postar, Agendado
   const statsWrapper = {
     isCompletedStatus: (statusName: string) => {
       const s = statusName?.toLowerCase() || '';
       return (
-        s.includes('conclu') ||
-        s.includes('agendado') ||
-        s.includes('postar') ||
-        s.includes('ag.odds') ||
-        s.includes('ag,odds') ||
-        s.includes('ag. odds') ||
-        s.includes('ap.gerente') ||
-        s.includes('ap. gerente') ||
-        s.includes('gerente')
+        s.includes('conclu') ||      // Concluído
+        s.includes('agendado') ||    // Agendado
+        s.includes('postar')         // Postar
       );
     }
   };
@@ -446,6 +437,16 @@ const DashboardPage = () => {
                 </span>
               </div>
             </div>
+          )}
+
+          {/* Designer Goals - Only show for designers/videomakers */}
+          {(isDesigner || isVideoMaker) && !loading && (
+            <DesignerGoals
+              demands={demands}
+              userName={user?.name || ''}
+              dailyGoal={5}
+              weeklyGoal={25}
+            />
           )}
 
           {/* Stats Cards */}

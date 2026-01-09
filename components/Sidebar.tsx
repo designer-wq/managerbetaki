@@ -9,7 +9,8 @@ import {
   Database,
   Key,
   CalendarDays,
-  BarChart3
+  BarChart3,
+  CalendarRange
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionsContext';
@@ -74,6 +75,7 @@ const Sidebar = () => {
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/', resource: 'dashboard', dashboardOnly: true },
     { icon: BarChart3, label: 'Relatório Designers', path: '/designer-report', resource: 'dashboard', dashboardOnly: true },
+    { icon: CalendarRange, label: 'Calendário Capacidade', path: '/capacity-calendar', resource: 'dashboard', dashboardOnly: true },
     { icon: ListTodo, label: 'Demandas', path: '/demands', resource: 'demands' },
     { icon: FolderOpen, label: 'Arquivos', path: '/files', resource: 'demands' },
     { icon: CalendarDays, label: 'Calendário Sazonal', path: '/seasonal-calendar', resource: 'demands' },

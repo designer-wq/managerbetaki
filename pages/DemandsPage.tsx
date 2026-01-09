@@ -406,13 +406,33 @@ const DemandsPage = () => {
       return map;
    }, [demands]);
 
-   // --- Stats Calculation ---
-   const stats = {
-      total: demands.length,
-      production: demands.filter(d => d.statuses?.name.toLowerCase().includes('produção')).length,
-      review: demands.filter(d => d.statuses?.name.toLowerCase().includes('revisão')).length,
-      delayed: demands.filter(isDelayed).length
-   };
+   // --- Stats Calculation - Must match tab filter logic ---
+   const stats = useMemo(() => {
+      // Production: same as tab 'production'
+      const production = demands.filter(d => {
+         const statusName = d.statuses?.name?.toLowerCase() || '';
+         return statusName.includes('produção') || statusName.includes('producao');
+      }).length;
+
+      // Review/Stalled: same as tab 'stalled' - Revisão + Ag. ODDs
+      const review = demands.filter(d => {
+         const statusName = d.statuses?.name?.toLowerCase() || '';
+         return statusName.includes('revisão') ||
+            statusName.includes('revisao') ||
+            statusName.includes('ag. odds') ||
+            statusName.includes('ag.odds');
+      }).length;
+
+      // Delayed: same as isDelayed function
+      const delayed = demands.filter(isDelayed).length;
+
+      return {
+         total: demands.length,
+         production,
+         review,
+         delayed
+      };
+   }, [demands]);
 
    // --- Demandas prestes a vencer (2 dias) ---
    const [showExpirationAlert, setShowExpirationAlert] = useState(true);

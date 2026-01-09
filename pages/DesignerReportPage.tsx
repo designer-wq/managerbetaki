@@ -531,8 +531,8 @@ const DesignerReportPage = () => {
                         </div>
                     </div>
 
-                    {/* Overall Stats Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
+                    {/* Overall Stats Cards - Horizontal Grid at Top */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
                         <div className="bg-gradient-to-br from-zinc-900 to-zinc-800/50 border border-zinc-700/50 rounded-2xl p-4 hover:border-zinc-600 transition-all">
                             <div className="flex items-center gap-2 mb-2">
                                 <div className="h-8 w-8 rounded-lg bg-zinc-700/50 flex items-center justify-center">
@@ -604,9 +604,9 @@ const DesignerReportPage = () => {
                         </div>
                     </div>
 
-                    {/* Designer Cards */}
-                    <div className="space-y-4">
-                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                    {/* Designer Cards Section - Below Stats */}
+                    <div className="mb-8">
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
                             <Award className="text-primary" size={20} />
                             Desempenho por Designer
                         </h2>
@@ -617,7 +617,7 @@ const DesignerReportPage = () => {
                                 <p className="text-zinc-400">Nenhum designer encontrado para este período</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                                 {filteredDesignerStats.map((designer) => (
                                     <div
                                         key={designer.id}

@@ -13,6 +13,7 @@ import RegistersPage from './pages/RegistersPage';
 import PasswordsPage from './pages/PasswordsPage';
 import SeasonalCalendarPage from './pages/SeasonalCalendarPage';
 import DesignerReportPage from './pages/DesignerReportPage';
+import CapacityCalendarPage from './pages/CapacityCalendarPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { PermissionRoute } from './components/PermissionRoute';
 import { ToastProvider } from './components/ui/ToastContext';
@@ -153,6 +154,13 @@ const App = () => {
                           <Route path="/designer-report" element={
                             <PermissionRoute resource="dashboard">
                               <DesignerReportPage />
+                            </PermissionRoute>
+                          } />
+
+                          {/* Capacity Calendar - uses 'dashboard' permission */}
+                          <Route path="/capacity-calendar" element={
+                            <PermissionRoute resource="dashboard">
+                              <CapacityCalendarPage />
                             </PermissionRoute>
                           } />
 
