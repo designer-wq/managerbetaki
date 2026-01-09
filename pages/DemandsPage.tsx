@@ -414,13 +414,16 @@ const DemandsPage = () => {
          return statusName.includes('produção') || statusName.includes('producao');
       }).length;
 
-      // Review/Stalled: same as tab 'stalled' - Revisão + Ag. ODDs
+      // Review/Stalled: same as tab 'stalled' - Revisão + Ag. ODDs + Parado
       const review = demands.filter(d => {
-         const statusName = d.statuses?.name?.toLowerCase() || '';
+         const statusName = (d.statuses?.name || '').toLowerCase().trim();
          return statusName.includes('revisão') ||
             statusName.includes('revisao') ||
             statusName.includes('ag. odds') ||
-            statusName.includes('ag.odds');
+            statusName.includes('ag.odds') ||
+            statusName.includes('odds') ||
+            statusName.includes('parado') ||
+            statusName.includes('aguardando');
       }).length;
 
       // Delayed: same as isDelayed function
@@ -486,7 +489,13 @@ const DemandsPage = () => {
       } else if (activeTab === 'production') {
          matchesTab = statusName.includes('produção') || statusName.includes('producao');
       } else if (activeTab === 'stalled') {
-         matchesTab = statusName.includes('revisão') || statusName.includes('revisao') || statusName.includes('ag. odds') || statusName.includes('ag.odds');
+         matchesTab = statusName.includes('revisão') ||
+            statusName.includes('revisao') ||
+            statusName.includes('ag. odds') ||
+            statusName.includes('ag.odds') ||
+            statusName.includes('odds') ||
+            statusName.includes('parado') ||
+            statusName.includes('aguardando');
       } else if (activeTab === 'completed') {
          matchesTab = statusName.includes('concluído') || statusName.includes('concluido') || statusName.includes('entregue') || statusName.includes('finalizado');
       } else if (activeTab === 'delayed') {
