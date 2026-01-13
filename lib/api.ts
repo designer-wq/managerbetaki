@@ -1,4 +1,5 @@
 import { getSupabase } from './supabase';
+import { getNowISO, getDaysAgoSP, toISOStringSP } from './timezone';
 
 // Define types matching our schema
 export interface LogEntry {
@@ -140,7 +141,7 @@ export const updateRecord = async (tableName: string, id: string, updates: any, 
 
     const { data, error } = await (supabase as any)
         .from(tableName)
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({ ...updates, updated_at: getNowISO() })
         .eq('id', id)
         .select()
         .single();
@@ -258,13 +259,12 @@ export const fetchAllLogs = async (days = 30) => {
     const supabase = getSupabase();
     if (!supabase) return [];
 
-    const date = new Date();
-    date.setDate(date.getDate() - days);
+    const date = getDaysAgoSP(days);
 
     const { data, error } = await supabase
         .from('logs')
         .select('id, record_id, action, details, created_at')
-        .gte('created_at', date.toISOString())
+        .gte('created_at', toISOStringSP(date))
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -279,8 +279,7 @@ export const fetchRecentComments = async (days = 30) => {
     const supabase = getSupabase();
     if (!supabase) return [];
 
-    const date = new Date();
-    date.setDate(date.getDate() - days);
+    const date = getDaysAgoSP(days);
 
     const { data, error } = await supabase
         .from('comments')
@@ -291,7 +290,7 @@ export const fetchRecentComments = async (days = 30) => {
             created_at,
             profiles ( name )
         `)
-        .gte('created_at', date.toISOString())
+        .gte('created_at', toISOStringSP(date))
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -305,8 +304,7 @@ export const fetchRecentMentions = async (days = 30) => {
     const supabase = getSupabase();
     if (!supabase) return [];
 
-    const date = new Date();
-    date.setDate(date.getDate() - days);
+    const date = getDaysAgoSP(days);
 
     const { data, error } = await supabase
         .from('comments')
@@ -317,7 +315,7 @@ export const fetchRecentMentions = async (days = 30) => {
             created_at,
             profiles ( name )
         `)
-        .gte('created_at', date.toISOString())
+        .gte('created_at', toISOStringSP(date))
         .ilike('content', '%@%')
         .order('created_at', { ascending: false });
 
@@ -455,6 +453,7 @@ export const fetchExecutiveKpis = async (periodStart: string, periodEnd: string)
             deliveries_count++;
         }
 
+
         // SLA Calculation
         if (d.deadline) {
             const deadlineDate = new Date(d.deadline);
@@ -473,8 +472,9 @@ export const fetchExecutiveKpis = async (periodStart: string, periodEnd: string)
                     sla_nok++;
                 }
             } else {
-                // Not completed
-                if (new Date() > deadlineDate) sla_nok++;
+                // Not completed - use São Paulo timezone for current date
+                const { getSaoPauloDate } = require('./timezone');
+                if (getSaoPauloDate() > deadlineDate) sla_nok++;
                 // Pending items not overdue are neutral for "Met SLA" vs "Missed SLA" count usually,
                 // but for "Global Efficiency", we might want (OK / (OK + NOK)).
                 // If we include pending in denominator, efficiency drops.

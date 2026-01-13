@@ -30,6 +30,7 @@ import { useRealtimeSubscription } from "../hooks/useRealtimeSubscription";
 import { Skeleton } from "../components/ui/Skeleton";
 import { useAuth } from "../contexts/AuthContext";
 import DesignerGoals from "../components/designer/DesignerGoals";
+import { getSaoPauloDate, parseDateToSP, isDeliveredStatus, getDeliveryDateStr } from "../lib/timezone";
 
 // Simple empty state component (replaces ReportEmptyState)
 const EmptyState = ({ title, description }: { title: string; description: string }) => (
@@ -155,9 +156,9 @@ const DashboardPage = () => {
     // User request: "atraso só contabiliza se tiver nos status de backlog ou revisao"
     const urgent = data.filter((d) => {
       if (!d.deadline) return false;
-      const deadline = new Date(d.deadline);
+      const deadline = parseDateToSP(d.deadline);
       deadline.setHours(23, 59, 59, 999);
-      const now = new Date();
+      const now = getSaoPauloDate();
 
       if (now <= deadline) return false;
 
@@ -175,7 +176,7 @@ const DashboardPage = () => {
     // User request: "mostrar somente do mes atual... e uma comparação do proximo mês"
     // User request: "contabiliza como concluido... qualquer status menos Backlog, em produção e Revisão"
 
-    const now = new Date();
+    const now = getSaoPauloDate();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
@@ -262,22 +263,22 @@ const DashboardPage = () => {
       const s = d.statuses?.name?.toLowerCase() || '';
       const isDone = isCompletedStatus(s); // Use helper
 
-      // Use DEADLINE instead of updated_at for weekly volume
-      const deadlineStr = d.deadline;
-      if (!deadlineStr) return; // Ignore if no deadline
+      // Usar DATA DE ENTREGA (updated_at para status entregues) em vez de deadline
+      const deliveryDateStr = getDeliveryDateStr(d);
+      if (!deliveryDateStr) return; // Ignore if no delivery date
 
-      // Parse deadline correctly (format: YYYY-MM-DD or ISO string)
-      const deadlineDate = new Date(deadlineStr.split('T')[0] + 'T12:00:00');
+      // Parse delivery date correctly (format: YYYY-MM-DD)
+      const deliveryDate = new Date(deliveryDateStr + 'T12:00:00');
 
-      // Only count if the demand is COMPLETED and has a deadline in the target week
+      // Only count if the demand is COMPLETED and has a delivery date in the target week
       if (isDone) {
-        if (deadlineDate >= startOfWeek && deadlineDate <= endOfWeek) {
-          const dayIdx = deadlineDate.getDay();
+        if (deliveryDate >= startOfWeek && deliveryDate <= endOfWeek) {
+          const dayIdx = deliveryDate.getDay();
           weeklyMap[dayIdx]++;
         }
-        else if (deadlineDate >= startOfLastWeek && deadlineDate <= endOfLastWeek) {
+        else if (deliveryDate >= startOfLastWeek && deliveryDate <= endOfLastWeek) {
           lastWeekCount++;
-          const dayIdx = deadlineDate.getDay();
+          const dayIdx = deliveryDate.getDay();
           lastWeeklyMap[dayIdx]++;
         }
       }
@@ -337,7 +338,7 @@ const DashboardPage = () => {
     const targetDayIndex = dayNameMap[data.name];
     if (typeof targetDayIndex === 'undefined') return;
 
-    const now = new Date();
+    const now = getSaoPauloDate();
 
     // Re-calculate start of week (same logic as calculateStats)
     const currentDay = now.getDay();
@@ -369,20 +370,20 @@ const DashboardPage = () => {
     const offset = targetDayIndex === 0 ? 6 : targetDayIndex - 1;
     targetDate.setDate(targetDate.getDate() + offset);
 
-    // Filter demands for this date - using DEADLINE instead of updated_at
+    // Filter demands for this date - usando DATA DE ENTREGA
     const dayItems = demands.filter(d => {
       // Must be completed
       const s = d.statuses?.name || '';
       if (!statsWrapper.isCompletedStatus(s)) return false;
 
-      // Check deadline date match (using deadline now)
-      const deadlineStr = d.deadline;
-      if (!deadlineStr) return false;
+      // Check delivery date match (usando data de entrega)
+      const deliveryDateStr = getDeliveryDateStr(d);
+      if (!deliveryDateStr) return false;
 
-      const deadlineDate = new Date(deadlineStr.split('T')[0] + 'T12:00:00');
-      return deadlineDate.getDate() === targetDate.getDate() &&
-        deadlineDate.getMonth() === targetDate.getMonth() &&
-        deadlineDate.getFullYear() === targetDate.getFullYear();
+      const deliveryDate = new Date(deliveryDateStr + 'T12:00:00');
+      return deliveryDate.getDate() === targetDate.getDate() &&
+        deliveryDate.getMonth() === targetDate.getMonth() &&
+        deliveryDate.getFullYear() === targetDate.getFullYear();
     });
 
     setSelectedDayDemands({

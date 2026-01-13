@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ui/ToastContext'; // Use toast
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { usePagination } from '../hooks/usePagination';
+import { getSaoPauloDate, getStartOfWeekSP, getEndOfWeekSP, toISOStringSP, isOverdueSP, parseDateToSP, isDeliveredStatus, getDeliveryDateStr } from '../lib/timezone';
 // import { useBulkSelection } from '../hooks/useBulkSelection'; // TEMPORARILY DISABLED
 
 
@@ -116,37 +117,29 @@ const DemandsPage = () => {
          setDateFilter({ type: 'all', startDate: null, endDate: null });
          setShowDateMenu(false);
       } else if (type === 'this_week') {
-         const now = new Date();
-         const day = now.getDay();
-         const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
-         const monday = new Date(now);
-         monday.setDate(diff);
-         monday.setHours(0, 0, 0, 0);
-         const sunday = new Date(monday);
-         sunday.setDate(monday.getDate() + 6);
-         sunday.setHours(23, 59, 59, 999);
+         const now = getSaoPauloDate();
+         const monday = getStartOfWeekSP(now);
+         const sunday = getEndOfWeekSP(now);
 
          setDateFilter({
             type: 'this_week',
-            startDate: monday.toISOString().split('T')[0],
-            endDate: sunday.toISOString().split('T')[0]
+            startDate: toISOStringSP(monday).split('T')[0],
+            endDate: toISOStringSP(sunday).split('T')[0]
          });
          setShowDateMenu(false);
       } else if (type === 'next_week') {
-         const now = new Date();
-         const day = now.getDay();
-         const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-         const nextMonday = new Date(now);
-         nextMonday.setDate(diff + 7);
-         nextMonday.setHours(0, 0, 0, 0);
-         const nextSunday = new Date(nextMonday);
+         const now = getSaoPauloDate();
+         const monday = getStartOfWeekSP(now);
+         const nextMonday = new Date(monday); // Use new Date for consistency
+         nextMonday.setDate(monday.getDate() + 7);
+         const nextSunday = new Date(nextMonday); // Use new Date for consistency
          nextSunday.setDate(nextMonday.getDate() + 6);
          nextSunday.setHours(23, 59, 59, 999);
 
          setDateFilter({
             type: 'next_week',
-            startDate: nextMonday.toISOString().split('T')[0],
-            endDate: nextSunday.toISOString().split('T')[0]
+            startDate: toISOStringSP(nextMonday).split('T')[0],
+            endDate: toISOStringSP(nextSunday).split('T')[0]
          });
          setShowDateMenu(false);
       } else {
@@ -371,7 +364,7 @@ const DemandsPage = () => {
       const s = d.statuses?.name?.toLowerCase() || '';
       const isCompleted = s.includes('conclu') || s.includes('agendado') || s.includes('postar');
       if (isCompleted || !d.deadline) return false;
-      return new Date(d.deadline.split('T')[0] + 'T23:59:59') < new Date();
+      return isOverdueSP(d.deadline);
    };
 
    // --- ID Generation ---
@@ -379,8 +372,8 @@ const DemandsPage = () => {
       const map = new Map<string, string>();
       // Sort by created_at ascending to determine sequence
       const sorted = [...demands].sort((a, b) => {
-         const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
-         const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+         const timeA = a.created_at ? parseDateToSP(a.created_at).getTime() : 0;
+         const timeB = b.created_at ? parseDateToSP(b.created_at).getTime() : 0;
          return timeA - timeB;
       });
 
@@ -388,7 +381,7 @@ const DemandsPage = () => {
 
       sorted.forEach(d => {
          if (!d.created_at) return;
-         const date = new Date(d.created_at);
+         const date = parseDateToSP(d.created_at);
          const year = date.getFullYear();
          const monthIndex = date.getMonth(); // 0-11
          const months = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -440,7 +433,7 @@ const DemandsPage = () => {
    // --- Demandas prestes a vencer (2 dias) ---
    const [showExpirationAlert, setShowExpirationAlert] = useState(true);
    const demandsAboutToExpire = useMemo(() => {
-      const now = new Date();
+      const now = getSaoPauloDate();
       now.setHours(0, 0, 0, 0);
 
       return demands.filter(d => {
@@ -451,7 +444,7 @@ const DemandsPage = () => {
          const isCompleted = s.includes('conclu') || s.includes('agendado') || s.includes('postar') || s.includes('entregue');
          if (isCompleted) return false;
 
-         const deadline = new Date(d.deadline.split('T')[0] + 'T12:00:00');
+         const deadline = parseDateToSP(d.deadline.split('T')[0] + 'T12:00:00');
          deadline.setHours(0, 0, 0, 0);
 
          const diffTime = deadline.getTime() - now.getTime();
@@ -551,14 +544,14 @@ const DemandsPage = () => {
 
          // User Request: "nas abas de aprovar e concluidos.. deve aparecer o mais recente criado [alterado]"
          if (activeTab === 'approval' || activeTab === 'completed') {
-            const dateA = a.updated_at ? new Date(a.updated_at).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0);
-            const dateB = b.updated_at ? new Date(b.updated_at).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+            const dateA = a.updated_at ? parseDateToSP(a.updated_at).getTime() : (a.created_at ? parseDateToSP(a.created_at).getTime() : 0);
+            const dateB = b.updated_at ? parseDateToSP(b.updated_at).getTime() : (b.created_at ? parseDateToSP(b.created_at).getTime() : 0);
             return dateB - dateA; // Most recent update first
          }
 
          // Default: Recent (created_at desc)
-         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+         const dateA = a.created_at ? parseDateToSP(a.created_at).getTime() : 0;
+         const dateB = b.created_at ? parseDateToSP(b.created_at).getTime() : 0;
          return dateB - dateA;
       }
 
@@ -571,7 +564,7 @@ const DemandsPage = () => {
       if (key === 'deadline') {
          if (!a.deadline) return 1;
          if (!b.deadline) return -1;
-         return modifier * (new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+         return modifier * (parseDateToSP(a.deadline).getTime() - parseDateToSP(b.deadline).getTime());
       }
       if (key === 'time') {
          // Calculate total time in seconds for each demand
@@ -581,7 +574,7 @@ const DemandsPage = () => {
                const statusName = d.statuses?.name?.toLowerCase() || '';
                const isInProduction = statusName.includes('produção') || statusName.includes('producao');
                if (isInProduction) {
-                  const elapsed = Math.floor((Date.now() - new Date(d.production_started_at).getTime()) / 1000);
+                  const elapsed = Math.floor((getSaoPauloDate().getTime() - parseDateToSP(d.production_started_at).getTime()) / 1000);
                   total += elapsed;
                }
             }
@@ -703,9 +696,9 @@ const DemandsPage = () => {
                               </p>
                               <div className="mt-3 flex flex-wrap gap-2">
                                  {demandsAboutToExpire.slice(0, 5).map(d => {
-                                    const deadline = new Date(d.deadline.split('T')[0] + 'T12:00:00');
+                                    const deadline = parseDateToSP(d.deadline.split('T')[0] + 'T12:00:00');
                                     deadline.setHours(0, 0, 0, 0);
-                                    const now = new Date();
+                                    const now = getSaoPauloDate();
                                     now.setHours(0, 0, 0, 0);
                                     const diffDays = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                                     const urgencyText = diffDays === 0 ? 'HOJE!' : diffDays === 1 ? 'Amanhã' : `Em ${diffDays} dias`;
@@ -1114,20 +1107,14 @@ const DemandsPage = () => {
                                  </td>
                                  <td className="px-2 py-4 whitespace-nowrap">
                                     {(() => {
-                                       const s = item.statuses?.name?.toLowerCase() || '';
-                                       const isDelivered = s.includes('agendado') ||
-                                          s.includes('ag.odds') ||
-                                          s.includes('postar') ||
-                                          s.includes('ap.gerente') ||
-                                          s.includes('gerente') ||
-                                          s.includes('conclu') ||
-                                          s.includes('entregue');
+                                       const deliveryDateStr = getDeliveryDateStr(item);
+                                       const isDelivered = isDeliveredStatus(item.statuses?.name);
 
-                                       if (!isDelivered || !item.updated_at) return <span className="text-zinc-600 text-[10px]">-</span>;
+                                       if (!isDelivered || !deliveryDateStr) return <span className="text-zinc-600 text-[10px]">-</span>;
 
                                        return (
                                           <span className="text-zinc-300 text-[10px]">
-                                             {new Date(item.updated_at).toLocaleDateString()}
+                                             {new Date(deliveryDateStr + 'T12:00:00').toLocaleDateString()}
                                           </span>
                                        );
                                     })()}

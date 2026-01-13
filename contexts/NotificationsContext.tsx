@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { getSupabase } from '../lib/supabase';
+import { getNowISO } from '../lib/timezone';
 
 export interface Notification {
     id: string;
@@ -81,12 +82,12 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
             // Note: Cast to any since notifications table types aren't generated yet
             await (supabase as any)
                 .from('notifications')
-                .update({ is_read: true, read_at: new Date().toISOString() })
+                .update({ is_read: true, read_at: getNowISO() })
                 .in('id', ids);
 
             setNotifications(prev =>
                 prev.map(n =>
-                    ids.includes(n.id) ? { ...n, is_read: true, read_at: new Date().toISOString() } : n
+                    ids.includes(n.id) ? { ...n, is_read: true, read_at: getNowISO() } : n
                 )
             );
         } catch (err) {
@@ -102,7 +103,7 @@ export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ child
             await supabase.rpc('mark_all_notifications_read');
 
             setNotifications(prev =>
-                prev.map(n => ({ ...n, is_read: true, read_at: new Date().toISOString() }))
+                prev.map(n => ({ ...n, is_read: true, read_at: getNowISO() }))
             );
         } catch (err) {
             console.error('Error marking all notifications as read:', err);

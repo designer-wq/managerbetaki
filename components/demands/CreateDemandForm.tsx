@@ -4,6 +4,7 @@ import { fetchTable, createRecord, updateRecord, fetchComments, fetchLogs, upser
 import { useToast } from '../../components/ui/ToastContext';
 import { useDemandTimer } from '../../hooks/useDemandTimer';
 import DemandComments from './DemandComments';
+import { getNowISO, getSaoPauloDate } from '../../lib/timezone';
 
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -222,16 +223,47 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
         const newStatusObj = statuses.find(s => s.id === newStatusId);
         const oldStatusObj = statuses.find(s => s.id === oldStatusId);
 
-        const isNewProduction = newStatusObj?.name.toLowerCase().includes('produção');
-        const isOldProduction = oldStatusObj?.name.toLowerCase().includes('produção');
+        const newStatusName = newStatusObj?.name?.toLowerCase() || '';
+        const oldStatusName = oldStatusObj?.name?.toLowerCase() || '';
+
+        const isNewProduction = newStatusName.includes('produção');
+        const isOldProduction = oldStatusName.includes('produção');
 
         // Build single update payload to avoid duplicate logs
         let updates: any = { status_id: newStatusId };
         let newTimerState = { ...timerState };
 
+        // === LÓGICA DE DATA DE ENTREGA (finished_at) ===
+        // 1. Marca finished_at APENAS quando vai para "Postar" ou "Ap.Gerente"
+        // 2. LIMPA finished_at quando vai para "Revisão"
+        // 3. NÃO muda quando vai para "Agendado", "Concluído" ou outros
+        // 4. Atualiza finished_at se voltar de "Revisão" para "Postar"
+
+        const isNewPostarOrApGerente = newStatusName.includes('postar') ||
+            newStatusName.includes('ap.gerente') ||
+            newStatusName.includes('ap. gerente');
+        const isNewRevisao = newStatusName.includes('revisão') || newStatusName.includes('revisao');
+        const isOldRevisao = oldStatusName.includes('revisão') || oldStatusName.includes('revisao');
+
+        // Verificar finished_at atual da demanda
+        const currentFinishedAt = initialData?.finished_at;
+
+        if (isNewRevisao) {
+            // Vai para Revisão: LIMPA a data de entrega
+            updates.finished_at = null;
+        } else if (isNewPostarOrApGerente) {
+            // Vai para Postar/Ap.Gerente: marca a data de entrega
+            // Marca se não tem ainda OU se veio de Revisão
+            if (!currentFinishedAt || isOldRevisao) {
+                updates.finished_at = getNowISO();
+            }
+            // Se já tem finished_at e não veio de revisão, NÃO atualiza
+        }
+        // Para outros status (Agendado, Concluído, etc.): NÃO mexe no finished_at
+
         if (!isOldProduction && isNewProduction) {
             // Started Production
-            const now = new Date().toISOString();
+            const now = getNowISO();
             updates.production_started_at = now;
             newTimerState.production_started_at = now;
         }
@@ -239,7 +271,7 @@ const CreateDemandForm: React.FC<CreateDemandFormProps> = ({
             // Stopped Production
             if (timerState.production_started_at) {
                 const start = new Date(timerState.production_started_at).getTime();
-                const now = new Date().getTime();
+                const now = getSaoPauloDate().getTime();
                 const sessionSeconds = Math.max(0, Math.floor((now - start) / 1000));
 
                 updates.production_started_at = null;

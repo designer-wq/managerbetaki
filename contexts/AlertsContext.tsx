@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { fetchDemands, fetchTable } from '../lib/api';
 import { useAuth } from './AuthContext';
+import { getSaoPauloDate, parseDateToSP } from '../lib/timezone';
 
 interface AlertsContextType {
     demandsAlertCount: number;
@@ -56,7 +57,7 @@ export const AlertsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // Count demands about to expire (within 2 days)
     const demandsAlertCount = useMemo(() => {
-        const now = new Date();
+        const now = getSaoPauloDate();
         now.setHours(0, 0, 0, 0);
 
         return filteredDemands.filter(d => {
@@ -67,7 +68,7 @@ export const AlertsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             const isCompleted = s.includes('conclu') || s.includes('agendado') || s.includes('postar') || s.includes('entregue');
             if (isCompleted) return false;
 
-            const deadline = new Date(d.deadline.split('T')[0] + 'T12:00:00');
+            const deadline = parseDateToSP(d.deadline.split('T')[0] + 'T12:00:00');
             deadline.setHours(0, 0, 0, 0);
 
             const diffTime = deadline.getTime() - now.getTime();
@@ -84,7 +85,7 @@ export const AlertsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             if (!p.renewal_date || !p.is_active) return false;
             const [y, m, d] = p.renewal_date.split('-').map(Number);
             const renewalDate = new Date(y, m - 1, d);
-            const today = new Date();
+            const today = getSaoPauloDate();
             today.setHours(0, 0, 0, 0);
             const daysUntil = Math.ceil((renewalDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
             return daysUntil >= 0 && daysUntil <= 7;

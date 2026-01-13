@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { getNowISO, getSaoPauloDate, parseDateToSP } from '../../lib/timezone';
 
 interface Comment {
     id: string;
@@ -153,7 +154,7 @@ export const DemandComments: React.FC<DemandCommentsProps> = ({
                         content: cleanContent,
                         mentions,
                         is_edited: true,
-                        edited_at: new Date().toISOString()
+                        edited_at: getNowISO()
                     })
                     .eq('id', editingComment.id);
             } else {
@@ -180,7 +181,7 @@ export const DemandComments: React.FC<DemandCommentsProps> = ({
         try {
             await (supabase as any)
                 .from('comments')
-                .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+                .update({ is_deleted: true, deleted_at: getNowISO() })
                 .eq('id', commentId);
             await fetchComments();
         } catch (error) {
@@ -240,8 +241,8 @@ export const DemandComments: React.FC<DemandCommentsProps> = ({
     );
 
     const formatTime = (dateString: string) => {
-        const date = new Date(dateString);
-        const now = new Date();
+        const date = parseDateToSP(dateString);
+        const now = getSaoPauloDate();
         const diff = now.getTime() - date.getTime();
         const minutes = Math.floor(diff / 60000);
         const hours = Math.floor(diff / 3600000);

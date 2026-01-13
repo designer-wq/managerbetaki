@@ -13,12 +13,14 @@ import {
     Award,
     Target,
     BarChart3,
-    Filter
+    Filter,
+    CalendarCheck
 } from 'lucide-react';
 import { fetchDemands, fetchProfiles, fetchAuthUsersList } from '../lib/api';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Skeleton } from '../components/ui/Skeleton';
 import { useAuth } from '../contexts/AuthContext';
+import { getSaoPauloDate, getTodaySP, isOverdueSP, getStartOfWeekSP, getEndOfWeekSP, isDeliveredStatus, getDeliveryDateStr, matchesDeliveryDate } from '../lib/timezone';
 
 interface DesignerStats {
     id: string;
@@ -41,6 +43,11 @@ const DesignerReportPage = () => {
     const [designers, setDesigners] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedDesigner, setSelectedDesigner] = useState<string>('all');
+    const [activeTab, setActiveTab] = useState<'general' | 'today'>('general');
+
+    // Filters for "Do Dia" tab
+    const [selectedDate, setSelectedDate] = useState<string>('');
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['Agendado', 'Postar', 'Ap.Gerente', 'Concluído']);
 
     // User role detection
     const role = user?.role?.toLowerCase() || '';
@@ -94,21 +101,15 @@ const DesignerReportPage = () => {
 
     // Calculate date ranges
     const getDateRange = useMemo(() => {
-        const now = new Date();
+        const now = getSaoPauloDate();
 
         if (dateFilter.type === 'all') {
             return { start: null, end: null };
         }
 
         if (dateFilter.type === 'this_week') {
-            const day = now.getDay();
-            const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-            const monday = new Date(now);
-            monday.setDate(diff);
-            monday.setHours(0, 0, 0, 0);
-            const sunday = new Date(monday);
-            sunday.setDate(monday.getDate() + 6);
-            sunday.setHours(23, 59, 59, 999);
+            const monday = getStartOfWeekSP(now);
+            const sunday = getEndOfWeekSP(now);
             return { start: monday, end: sunday };
         }
 
@@ -193,6 +194,9 @@ const DesignerReportPage = () => {
 
     useEffect(() => {
         loadData();
+
+        // Initialize selected date with today's date in São Paulo timezone
+        setSelectedDate(getTodaySP());
     }, []);
 
     useRealtimeSubscription(['demands'], () => loadData(true));
@@ -228,8 +232,7 @@ const DesignerReportPage = () => {
         const statusName = demand.statuses?.name || '';
         if (isCompletedStatus(statusName) || !demand.deadline) return false;
 
-        const deadlineDate = new Date(demand.deadline.split('T')[0] + 'T23:59:59');
-        return new Date() > deadlineDate;
+        return isOverdueSP(demand.deadline);
     };
 
     const wasCompletedOnTime = (demand: any) => {
@@ -257,6 +260,35 @@ const DesignerReportPage = () => {
             return deadlineDate >= getDateRange.start! && deadlineDate <= getDateRange.end!;
         });
     }, [demands, getDateRange]);
+
+    // Filter demands by selected date and statuses
+    // Usar DATA DE ENTREGA (updated_at para status entregues) em vez de deadline
+    const todayCompletedDemands = useMemo(() => {
+        if (!selectedDate) return [];
+
+        return demands.filter(d => {
+            // Check if status matches any selected status (exact match, case-insensitive)
+            const statusName = (d.statuses?.name || '').trim();
+            const matchesStatus = selectedStatuses.some(selectedStatus =>
+                statusName.toLowerCase() === selectedStatus.toLowerCase()
+            );
+            if (!matchesStatus) return false;
+
+            // Usar função centralizada para verificar data de entrega
+            return matchesDeliveryDate(d, selectedDate);
+        });
+    }, [demands, selectedDate, selectedStatuses]);
+
+    // Get all unique statuses from demands
+    const allStatuses = useMemo(() => {
+        const statusSet = new Set<string>();
+        demands.forEach(d => {
+            if (d.statuses?.name) {
+                statusSet.add(d.statuses.name);
+            }
+        });
+        return Array.from(statusSet).sort();
+    }, [demands]);
 
     // Calculate stats per designer
     const designerStats: DesignerStats[] = useMemo(() => {
@@ -358,6 +390,93 @@ const DesignerReportPage = () => {
         });
     }, [designerStats]);
 
+    // Calculate stats per designer for TODAY's completed tasks
+    const todayDesignerStats: DesignerStats[] = useMemo(() => {
+        const stats: Record<string, DesignerStats> = {};
+
+        designers.forEach(designer => {
+            stats[designer.id] = {
+                id: designer.id,
+                name: designer.name,
+                avatar_url: designer.avatar_url,
+                completed: 0,
+                completedOnTime: 0,
+                completedLate: 0,
+                pending: 0,
+                overdue: 0,
+                inProduction: 0,
+                totalDeadlineThisPeriod: 0,
+                avgTimeMinutes: 0,
+                efficiency: 0
+            };
+        });
+
+        // Track time for average calculation
+        const timeTracker: Record<string, { total: number; count: number }> = {};
+
+        todayCompletedDemands.forEach(demand => {
+            const designerId = demand.responsible_id;
+            if (!designerId || !stats[designerId]) return;
+
+            stats[designerId].totalDeadlineThisPeriod++;
+            stats[designerId].completed++;
+
+            if (wasCompletedOnTime(demand)) {
+                stats[designerId].completedOnTime++;
+            } else {
+                stats[designerId].completedLate++;
+            }
+
+            // Track time
+            if (demand.accumulated_time) {
+                if (!timeTracker[designerId]) {
+                    timeTracker[designerId] = { total: 0, count: 0 };
+                }
+                timeTracker[designerId].total += demand.accumulated_time / 60; // Convert to minutes
+                timeTracker[designerId].count++;
+            }
+        });
+
+        // Calculate averages and efficiency
+        Object.keys(stats).forEach(id => {
+            if (timeTracker[id] && timeTracker[id].count > 0) {
+                stats[id].avgTimeMinutes = Math.round(timeTracker[id].total / timeTracker[id].count);
+            }
+
+            const total = stats[id].completedOnTime + stats[id].completedLate;
+            if (total > 0) {
+                stats[id].efficiency = Math.round((stats[id].completedOnTime / total) * 100);
+            } else {
+                stats[id].efficiency = 0;
+            }
+        });
+
+        return Object.values(stats)
+            .filter(s => s.totalDeadlineThisPeriod > 0) // Only show designers with tasks today
+            .sort((a, b) => b.totalDeadlineThisPeriod - a.totalDeadlineThisPeriod);
+    }, [designers, todayCompletedDemands]);
+
+    // Overall stats for TODAY
+    const todayOverallStats = useMemo(() => {
+        return todayDesignerStats.reduce((acc, d) => ({
+            total: acc.total + d.totalDeadlineThisPeriod,
+            completed: acc.completed + d.completed,
+            completedOnTime: acc.completedOnTime + d.completedOnTime,
+            completedLate: acc.completedLate + d.completedLate,
+            pending: acc.pending + d.pending,
+            inProduction: acc.inProduction + d.inProduction,
+            overdue: acc.overdue + d.overdue
+        }), {
+            total: 0,
+            completed: 0,
+            completedOnTime: 0,
+            completedLate: 0,
+            pending: 0,
+            inProduction: 0,
+            overdue: 0
+        });
+    }, [todayDesignerStats]);
+
     // Filter designer stats
     const filteredDesignerStats = useMemo(() => {
         if (selectedDesigner === 'all') {
@@ -365,6 +484,14 @@ const DesignerReportPage = () => {
         }
         return designerStats.filter(d => d.id === selectedDesigner);
     }, [designerStats, selectedDesigner]);
+
+    // Filter TODAY designer stats
+    const filteredTodayDesignerStats = useMemo(() => {
+        if (selectedDesigner === 'all') {
+            return todayDesignerStats;
+        }
+        return todayDesignerStats.filter(d => d.id === selectedDesigner);
+    }, [todayDesignerStats, selectedDesigner]);
 
     const getEfficiencyColor = (efficiency: number) => {
         if (efficiency >= 80) return 'text-emerald-400';
@@ -437,288 +564,568 @@ const DesignerReportPage = () => {
                         </div>
                     )}
 
-                    {/* Page Header */}
-                    <div className="mb-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-white lg:text-4xl flex items-center gap-3">
-                                <BarChart3 className="text-primary" size={36} />
-                                Performance dos Designers
-                            </h1>
-                            <p className="text-zinc-400 mt-2">
-                                Acompanhe entregas, prazos e eficiência da equipe de design
-                            </p>
-                        </div>
-
-                        {/* Filters */}
-                        <div className="flex flex-wrap gap-3">
-                            {/* Designer Filter */}
-                            <div className="relative min-w-[200px]">
-                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-                                <select
-                                    value={selectedDesigner}
-                                    onChange={(e) => setSelectedDesigner(e.target.value)}
-                                    className="w-full appearance-none bg-zinc-900/70 border border-zinc-700/50 rounded-xl py-2.5 pl-10 pr-10 text-sm text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer"
-                                >
-                                    <option value="all">Todos os Designers</option>
-                                    {designers.map(d => (
-                                        <option key={d.id} value={d.id}>{d.name}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={16} />
-                            </div>
-
-                            {/* Date Filter */}
-                            <div className="relative">
-                                <button
-                                    onClick={() => setShowDateMenu(!showDateMenu)}
-                                    className="flex items-center gap-2 bg-zinc-900/70 border border-zinc-700/50 rounded-xl py-2.5 px-4 text-sm text-white hover:border-primary/50 transition-all"
-                                >
-                                    <Calendar size={18} className="text-zinc-500" />
-                                    <span>{getDateFilterLabel()}</span>
-                                    <ChevronDown size={14} className={`text-zinc-500 transition-transform ${showDateMenu ? 'rotate-180' : ''}`} />
-                                </button>
-
-                                {showDateMenu && (
-                                    <>
-                                        <div className="fixed inset-0 z-10" onClick={() => setShowDateMenu(false)} />
-                                        <div className="absolute top-full right-0 mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-2 z-20">
-                                            {[
-                                                { type: 'all' as const, label: 'Todas as Datas' },
-                                                { type: 'this_week' as const, label: 'Esta Semana' },
-                                                { type: 'this_month' as const, label: 'Este Mês' },
-                                                { type: 'last_month' as const, label: 'Mês Passado' },
-                                            ].map(option => (
-                                                <button
-                                                    key={option.type}
-                                                    onClick={() => handleDateFilterChange(option.type)}
-                                                    className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${dateFilter.type === option.type
-                                                        ? 'bg-primary/20 text-primary'
-                                                        : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
-                                                        }`}
-                                                >
-                                                    {option.label}
-                                                </button>
-                                            ))}
-
-                                            <div className="border-t border-zinc-700 mt-2 pt-2">
-                                                <p className="px-4 py-1 text-xs text-zinc-500 font-medium">Período Personalizado</p>
-                                                <div className="px-4 py-2 space-y-2">
-                                                    <input
-                                                        type="date"
-                                                        value={customDateStart}
-                                                        onChange={(e) => setCustomDateStart(e.target.value)}
-                                                        className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-primary"
-                                                    />
-                                                    <input
-                                                        type="date"
-                                                        value={customDateEnd}
-                                                        onChange={(e) => setCustomDateEnd(e.target.value)}
-                                                        className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-primary"
-                                                    />
-                                                    <button
-                                                        onClick={applyCustomDateFilter}
-                                                        disabled={!customDateStart || !customDateEnd}
-                                                        className="w-full bg-primary text-black font-medium py-2 rounded-lg text-sm hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        Aplicar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
+                    {/* Tabs */}
+                    <div className="mb-6">
+                        <div className="flex gap-2 border-b border-zinc-700/50">
+                            <button
+                                onClick={() => setActiveTab('general')}
+                                className={`px-6 py-3 font-medium text-sm transition-all relative ${activeTab === 'general'
+                                    ? 'text-primary'
+                                    : 'text-zinc-400 hover:text-zinc-300'
+                                    }`}
+                            >
+                                <BarChart3 className="inline-block mr-2" size={16} />
+                                Geral
+                                {activeTab === 'general' && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
                                 )}
-                            </div>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('today')}
+                                className={`px-6 py-3 font-medium text-sm transition-all relative ${activeTab === 'today'
+                                    ? 'text-primary'
+                                    : 'text-zinc-400 hover:text-zinc-300'
+                                    }`}
+                            >
+                                <CalendarCheck className="inline-block mr-2" size={16} />
+                                Do Dia
+                                <span className="ml-2 px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full">
+                                    {todayCompletedDemands.length}
+                                </span>
+                                {activeTab === 'today' && (
+                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                                )}
+                            </button>
                         </div>
                     </div>
+
+                    {/* Page Header */}
+                    {activeTab === 'general' && (
+                        <div className="mb-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+                            <div>
+                                <h1 className="text-3xl font-bold tracking-tight text-white lg:text-4xl flex items-center gap-3">
+                                    <BarChart3 className="text-primary" size={36} />
+                                    Performance dos Designers
+                                </h1>
+                                <p className="text-zinc-400 mt-2">
+                                    Acompanhe entregas, prazos e eficiência da equipe de design
+                                </p>
+                            </div>
+
+                            {/* Filters */}
+                            <div className="flex flex-wrap gap-3">
+                                {/* Designer Filter */}
+                                <div className="relative min-w-[200px]">
+                                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                                    <select
+                                        value={selectedDesigner}
+                                        onChange={(e) => setSelectedDesigner(e.target.value)}
+                                        className="w-full appearance-none bg-zinc-900/70 border border-zinc-700/50 rounded-xl py-2.5 pl-10 pr-10 text-sm text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all cursor-pointer"
+                                    >
+                                        <option value="all">Todos os Designers</option>
+                                        {designers.map(d => (
+                                            <option key={d.id} value={d.id}>{d.name}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={16} />
+                                </div>
+
+                                {/* Date Filter */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowDateMenu(!showDateMenu)}
+                                        className="flex items-center gap-2 bg-zinc-900/70 border border-zinc-700/50 rounded-xl py-2.5 px-4 text-sm text-white hover:border-primary/50 transition-all"
+                                    >
+                                        <Calendar size={18} className="text-zinc-500" />
+                                        <span>{getDateFilterLabel()}</span>
+                                        <ChevronDown size={14} className={`text-zinc-500 transition-transform ${showDateMenu ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {showDateMenu && (
+                                        <>
+                                            <div className="fixed inset-0 z-10" onClick={() => setShowDateMenu(false)} />
+                                            <div className="absolute top-full right-0 mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-2 z-20">
+                                                {[
+                                                    { type: 'all' as const, label: 'Todas as Datas' },
+                                                    { type: 'this_week' as const, label: 'Esta Semana' },
+                                                    { type: 'this_month' as const, label: 'Este Mês' },
+                                                    { type: 'last_month' as const, label: 'Mês Passado' },
+                                                ].map(option => (
+                                                    <button
+                                                        key={option.type}
+                                                        onClick={() => handleDateFilterChange(option.type)}
+                                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${dateFilter.type === option.type
+                                                            ? 'bg-primary/20 text-primary'
+                                                            : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                                                            }`}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+
+                                                <div className="border-t border-zinc-700 mt-2 pt-2">
+                                                    <p className="px-4 py-1 text-xs text-zinc-500 font-medium">Período Personalizado</p>
+                                                    <div className="px-4 py-2 space-y-2">
+                                                        <input
+                                                            type="date"
+                                                            value={customDateStart}
+                                                            onChange={(e) => setCustomDateStart(e.target.value)}
+                                                            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-primary"
+                                                        />
+                                                        <input
+                                                            type="date"
+                                                            value={customDateEnd}
+                                                            onChange={(e) => setCustomDateEnd(e.target.value)}
+                                                            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-primary"
+                                                        />
+                                                        <button
+                                                            onClick={applyCustomDateFilter}
+                                                            disabled={!customDateStart || !customDateEnd}
+                                                            className="w-full bg-primary text-black font-medium py-2 rounded-lg text-sm hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            Aplicar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Overall Stats Cards - Horizontal Grid at Top */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
-                        <div className="bg-gradient-to-br from-zinc-900 to-zinc-800/50 border border-zinc-700/50 rounded-2xl p-4 hover:border-zinc-600 transition-all">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-8 w-8 rounded-lg bg-zinc-700/50 flex items-center justify-center">
-                                    <Target size={16} className="text-zinc-400" />
+                    {activeTab === 'general' && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
+                            <div className="bg-gradient-to-br from-zinc-900 to-zinc-800/50 border border-zinc-700/50 rounded-2xl p-4 hover:border-zinc-600 transition-all">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="h-8 w-8 rounded-lg bg-zinc-700/50 flex items-center justify-center">
+                                        <Target size={16} className="text-zinc-400" />
+                                    </div>
                                 </div>
+                                <p className="text-2xl font-bold text-white">{overallStats.total}</p>
+                                <p className="text-xs text-zinc-500 mt-1">Total no Período</p>
                             </div>
-                            <p className="text-2xl font-bold text-white">{overallStats.total}</p>
-                            <p className="text-xs text-zinc-500 mt-1">Total no Período</p>
-                        </div>
 
-                        <div className="bg-gradient-to-br from-emerald-950/50 to-zinc-900 border border-emerald-500/20 rounded-2xl p-4 hover:border-emerald-500/40 transition-all">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-8 w-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                                    <CheckCircle size={16} className="text-emerald-400" />
+                            <div className="bg-gradient-to-br from-emerald-950/50 to-zinc-900 border border-emerald-500/20 rounded-2xl p-4 hover:border-emerald-500/40 transition-all">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="h-8 w-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                        <CheckCircle size={16} className="text-emerald-400" />
+                                    </div>
                                 </div>
+                                <p className="text-2xl font-bold text-emerald-400">{overallStats.completed}</p>
+                                <p className="text-xs text-zinc-500 mt-1">Concluídas</p>
                             </div>
-                            <p className="text-2xl font-bold text-emerald-400">{overallStats.completed}</p>
-                            <p className="text-xs text-zinc-500 mt-1">Concluídas</p>
-                        </div>
 
-                        <div className="bg-gradient-to-br from-green-950/50 to-zinc-900 border border-green-500/20 rounded-2xl p-4 hover:border-green-500/40 transition-all">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-8 w-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                                    <TrendingUp size={16} className="text-green-400" />
+                            <div className="bg-gradient-to-br from-green-950/50 to-zinc-900 border border-green-500/20 rounded-2xl p-4 hover:border-green-500/40 transition-all">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="h-8 w-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                                        <TrendingUp size={16} className="text-green-400" />
+                                    </div>
                                 </div>
+                                <p className="text-2xl font-bold text-green-400">{overallStats.completedOnTime}</p>
+                                <p className="text-xs text-zinc-500 mt-1">No Prazo</p>
                             </div>
-                            <p className="text-2xl font-bold text-green-400">{overallStats.completedOnTime}</p>
-                            <p className="text-xs text-zinc-500 mt-1">No Prazo</p>
-                        </div>
 
-                        <div className="bg-gradient-to-br from-amber-950/50 to-zinc-900 border border-amber-500/20 rounded-2xl p-4 hover:border-amber-500/40 transition-all">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-8 w-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                                    <TrendingDown size={16} className="text-amber-400" />
+                            <div className="bg-gradient-to-br from-amber-950/50 to-zinc-900 border border-amber-500/20 rounded-2xl p-4 hover:border-amber-500/40 transition-all">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="h-8 w-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                        <TrendingDown size={16} className="text-amber-400" />
+                                    </div>
                                 </div>
+                                <p className="text-2xl font-bold text-amber-400">{overallStats.completedLate}</p>
+                                <p className="text-xs text-zinc-500 mt-1">Atrasadas</p>
                             </div>
-                            <p className="text-2xl font-bold text-amber-400">{overallStats.completedLate}</p>
-                            <p className="text-xs text-zinc-500 mt-1">Atrasadas</p>
-                        </div>
 
-                        <div className="bg-gradient-to-br from-blue-950/50 to-zinc-900 border border-blue-500/20 rounded-2xl p-4 hover:border-blue-500/40 transition-all">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                                    <Clock size={16} className="text-blue-400" />
+                            <div className="bg-gradient-to-br from-blue-950/50 to-zinc-900 border border-blue-500/20 rounded-2xl p-4 hover:border-blue-500/40 transition-all">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                        <Clock size={16} className="text-blue-400" />
+                                    </div>
                                 </div>
+                                <p className="text-2xl font-bold text-blue-400">{overallStats.inProduction}</p>
+                                <p className="text-xs text-zinc-500 mt-1">Em Produção</p>
                             </div>
-                            <p className="text-2xl font-bold text-blue-400">{overallStats.inProduction}</p>
-                            <p className="text-xs text-zinc-500 mt-1">Em Produção</p>
-                        </div>
 
-                        <div className="bg-gradient-to-br from-purple-950/50 to-zinc-900 border border-purple-500/20 rounded-2xl p-4 hover:border-purple-500/40 transition-all">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-8 w-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                                    <Minus size={16} className="text-purple-400" />
+                            <div className="bg-gradient-to-br from-purple-950/50 to-zinc-900 border border-purple-500/20 rounded-2xl p-4 hover:border-purple-500/40 transition-all">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="h-8 w-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                        <Minus size={16} className="text-purple-400" />
+                                    </div>
                                 </div>
+                                <p className="text-2xl font-bold text-purple-400">{overallStats.pending}</p>
+                                <p className="text-xs text-zinc-500 mt-1">Pendentes</p>
                             </div>
-                            <p className="text-2xl font-bold text-purple-400">{overallStats.pending}</p>
-                            <p className="text-xs text-zinc-500 mt-1">Pendentes</p>
-                        </div>
 
-                        <div className="bg-gradient-to-br from-red-950/50 to-zinc-900 border border-red-500/20 rounded-2xl p-4 hover:border-red-500/40 transition-all">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-8 w-8 rounded-lg bg-red-500/20 flex items-center justify-center">
-                                    <AlertTriangle size={16} className="text-red-400" />
+                            <div className="bg-gradient-to-br from-red-950/50 to-zinc-900 border border-red-500/20 rounded-2xl p-4 hover:border-red-500/40 transition-all">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="h-8 w-8 rounded-lg bg-red-500/20 flex items-center justify-center">
+                                        <AlertTriangle size={16} className="text-red-400" />
+                                    </div>
                                 </div>
+                                <p className="text-2xl font-bold text-red-400">{overallStats.overdue}</p>
+                                <p className="text-xs text-zinc-500 mt-1">Vencidas</p>
                             </div>
-                            <p className="text-2xl font-bold text-red-400">{overallStats.overdue}</p>
-                            <p className="text-xs text-zinc-500 mt-1">Vencidas</p>
                         </div>
-                    </div>
+                    )}
 
                     {/* Designer Cards Section - Below Stats */}
-                    <div className="mb-8">
-                        <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
-                            <Award className="text-primary" size={20} />
-                            Desempenho por Designer
-                        </h2>
+                    {activeTab === 'general' && (
+                        <div className="mb-8">
+                            <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+                                <Award className="text-primary" size={20} />
+                                Desempenho por Designer
+                            </h2>
 
-                        {filteredDesignerStats.length === 0 ? (
-                            <div className="bg-zinc-900/50 border border-zinc-700/50 rounded-2xl p-12 text-center">
-                                <Users className="mx-auto text-zinc-600 mb-4" size={48} />
-                                <p className="text-zinc-400">Nenhum designer encontrado para este período</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                                {filteredDesignerStats.map((designer) => (
-                                    <div
-                                        key={designer.id}
-                                        className="bg-gradient-to-br from-zinc-900 to-zinc-800/30 border border-zinc-700/50 rounded-2xl p-6 hover:border-primary/30 transition-all group"
-                                    >
-                                        {/* Header */}
-                                        <div className="flex items-center justify-between mb-6">
-                                            <div className="flex items-center gap-3">
-                                                {designer.avatar_url ? (
-                                                    <img
-                                                        src={designer.avatar_url}
-                                                        alt={designer.name}
-                                                        className="h-12 w-12 rounded-full object-cover border-2 border-zinc-700 group-hover:border-primary/50 transition-colors"
+                            {filteredDesignerStats.length === 0 ? (
+                                <div className="bg-zinc-900/50 border border-zinc-700/50 rounded-2xl p-12 text-center">
+                                    <Users className="mx-auto text-zinc-600 mb-4" size={48} />
+                                    <p className="text-zinc-400">Nenhum designer encontrado para este período</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                    {filteredDesignerStats.map((designer) => (
+                                        <div
+                                            key={designer.id}
+                                            className="bg-gradient-to-br from-zinc-900 to-zinc-800/30 border border-zinc-700/50 rounded-2xl p-6 hover:border-primary/30 transition-all group"
+                                        >
+                                            {/* Header */}
+                                            <div className="flex items-center justify-between mb-6">
+                                                <div className="flex items-center gap-3">
+                                                    {designer.avatar_url ? (
+                                                        <img
+                                                            src={designer.avatar_url}
+                                                            alt={designer.name}
+                                                            className="h-12 w-12 rounded-full object-cover border-2 border-zinc-700 group-hover:border-primary/50 transition-colors"
+                                                        />
+                                                    ) : (
+                                                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-zinc-700 flex items-center justify-center text-primary font-bold text-lg">
+                                                            {designer.name.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <h3 className="font-semibold text-white text-lg">{designer.name}</h3>
+                                                        <p className="text-xs text-zinc-500">
+                                                            {designer.totalDeadlineThisPeriod} demandas no período
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Efficiency Badge */}
+                                                <div className={`px-3 py-1.5 rounded-full ${getEfficiencyBg(designer.efficiency)} ${getEfficiencyColor(designer.efficiency)} text-sm font-bold`}>
+                                                    {designer.efficiency}% eficiência
+                                                </div>
+                                            </div>
+
+                                            {/* Stats Grid */}
+                                            <div className="grid grid-cols-3 gap-3 mb-4">
+                                                <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                                                    <p className="text-2xl font-bold text-emerald-400">{designer.completed}</p>
+                                                    <p className="text-xs text-zinc-500 mt-1">Concluídas</p>
+                                                </div>
+                                                <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                                                    <p className="text-2xl font-bold text-blue-400">{designer.inProduction + designer.pending}</p>
+                                                    <p className="text-xs text-zinc-500 mt-1">A Fazer</p>
+                                                </div>
+                                                <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                                                    <p className="text-2xl font-bold text-red-400">{designer.overdue}</p>
+                                                    <p className="text-xs text-zinc-500 mt-1">Atrasadas</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Progress Bar - Completed vs Pending */}
+                                            <div className="mb-4">
+                                                <div className="flex justify-between text-xs text-zinc-500 mb-2">
+                                                    <span>Progresso</span>
+                                                    <span>{designer.completed}/{designer.totalDeadlineThisPeriod}</span>
+                                                </div>
+                                                <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-primary to-emerald-500 transition-all duration-500"
+                                                        style={{
+                                                            width: designer.totalDeadlineThisPeriod > 0
+                                                                ? `${(designer.completed / designer.totalDeadlineThisPeriod) * 100}%`
+                                                                : '0%'
+                                                        }}
                                                     />
-                                                ) : (
-                                                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-zinc-700 flex items-center justify-center text-primary font-bold text-lg">
-                                                        {designer.name.charAt(0).toUpperCase()}
+                                                </div>
+                                            </div>
+
+                                            {/* Detail Stats */}
+                                            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-zinc-700/50">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-2 w-2 rounded-full bg-green-400" />
+                                                    <span className="text-xs text-zinc-400">No prazo: <span className="text-green-400 font-medium">{designer.completedOnTime}</span></span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-2 w-2 rounded-full bg-amber-400" />
+                                                    <span className="text-xs text-zinc-400">Atrasada na entrega: <span className="text-amber-400 font-medium">{designer.completedLate}</span></span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-2 w-2 rounded-full bg-blue-400" />
+                                                    <span className="text-xs text-zinc-400">Em produção: <span className="text-blue-400 font-medium">{designer.inProduction}</span></span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-2 w-2 rounded-full bg-purple-400" />
+                                                    <span className="text-xs text-zinc-400">Pendente: <span className="text-purple-400 font-medium">{designer.pending}</span></span>
+                                                </div>
+                                            </div>
+
+                                            {/* Avg Time */}
+                                            {designer.avgTimeMinutes > 0 && (
+                                                <div className="mt-4 pt-4 border-t border-zinc-700/50">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-xs text-zinc-500">Tempo médio por demanda</span>
+                                                        <span className="text-sm font-medium text-primary">{formatTime(designer.avgTimeMinutes)}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Today's Completed Tasks Tab */}
+                    {activeTab === 'today' && (
+                        <>
+                            {/* Page Header for Today */}
+                            <div className="mb-6">
+                                <h1 className="text-3xl font-bold tracking-tight text-white lg:text-4xl flex items-center gap-3">
+                                    <CalendarCheck className="text-primary" size={36} />
+                                    Entregas por Data
+                                </h1>
+                                <p className="text-zinc-400 mt-2">
+                                    Filtre tarefas por data de entrega e status
+                                </p>
+                            </div>
+
+                            {/* Filters */}
+                            <div className="bg-gradient-to-br from-zinc-900 to-zinc-800/30 border border-zinc-700/50 rounded-2xl p-6 mb-8">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    {/* Date Filter */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                            Data de Entrega
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={selectedDate}
+                                            onChange={(e) => setSelectedDate(e.target.value)}
+                                            className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                                        />
+                                    </div>
+
+                                    {/* Status Filter */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                            Status (selecione múltiplos)
+                                        </label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {allStatuses.map(status => {
+                                                const isSelected = selectedStatuses.includes(status);
+                                                return (
+                                                    <button
+                                                        key={status}
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                setSelectedStatuses(selectedStatuses.filter(s => s !== status));
+                                                            } else {
+                                                                setSelectedStatuses([...selectedStatuses, status]);
+                                                            }
+                                                        }}
+                                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isSelected
+                                                            ? 'bg-primary text-white border-2 border-primary'
+                                                            : 'bg-zinc-800 text-zinc-400 border-2 border-zinc-700 hover:border-zinc-600'
+                                                            }`}
+                                                    >
+                                                        {status}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <p className="text-xs text-zinc-500 mt-2">
+                                            {selectedStatuses.length} status selecionado(s)
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Overall Stats Cards for Today */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
+                                <div className="bg-gradient-to-br from-zinc-900 to-zinc-800/50 border border-zinc-700/50 rounded-2xl p-4 hover:border-zinc-600 transition-all">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="h-8 w-8 rounded-lg bg-zinc-700/50 flex items-center justify-center">
+                                            <Target size={16} className="text-zinc-400" />
+                                        </div>
+                                    </div>
+                                    <p className="text-2xl font-bold text-white">{todayOverallStats.total}</p>
+                                    <p className="text-xs text-zinc-500 mt-1">Total Hoje</p>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-emerald-950/50 to-zinc-900 border border-emerald-500/20 rounded-2xl p-4 hover:border-emerald-500/40 transition-all">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="h-8 w-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                            <CheckCircle size={16} className="text-emerald-400" />
+                                        </div>
+                                    </div>
+                                    <p className="text-2xl font-bold text-emerald-400">{todayOverallStats.completed}</p>
+                                    <p className="text-xs text-zinc-500 mt-1">Concluídas</p>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-green-950/50 to-zinc-900 border border-green-500/20 rounded-2xl p-4 hover:border-green-500/40 transition-all">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="h-8 w-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                                            <TrendingUp size={16} className="text-green-400" />
+                                        </div>
+                                    </div>
+                                    <p className="text-2xl font-bold text-green-400">{todayOverallStats.completedOnTime}</p>
+                                    <p className="text-xs text-zinc-500 mt-1">No Prazo</p>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-amber-950/50 to-zinc-900 border border-amber-500/20 rounded-2xl p-4 hover:border-amber-500/40 transition-all">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="h-8 w-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                            <TrendingDown size={16} className="text-amber-400" />
+                                        </div>
+                                    </div>
+                                    <p className="text-2xl font-bold text-amber-400">{todayOverallStats.completedLate}</p>
+                                    <p className="text-xs text-zinc-500 mt-1">Atrasadas</p>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-blue-950/50 to-zinc-900 border border-blue-500/20 rounded-2xl p-4 hover:border-blue-500/40 transition-all">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                            <Clock size={16} className="text-blue-400" />
+                                        </div>
+                                    </div>
+                                    <p className="text-2xl font-bold text-blue-400">{todayOverallStats.inProduction}</p>
+                                    <p className="text-xs text-zinc-500 mt-1">Em Produção</p>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-purple-950/50 to-zinc-900 border border-purple-500/20 rounded-2xl p-4 hover:border-purple-500/40 transition-all">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="h-8 w-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                            <Minus size={16} className="text-purple-400" />
+                                        </div>
+                                    </div>
+                                    <p className="text-2xl font-bold text-purple-400">{todayOverallStats.pending}</p>
+                                    <p className="text-xs text-zinc-500 mt-1">Pendentes</p>
+                                </div>
+
+                                <div className="bg-gradient-to-br from-red-950/50 to-zinc-900 border border-red-500/20 rounded-2xl p-4 hover:border-red-500/40 transition-all">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="h-8 w-8 rounded-lg bg-red-500/20 flex items-center justify-center">
+                                            <AlertTriangle size={16} className="text-red-400" />
+                                        </div>
+                                    </div>
+                                    <p className="text-2xl font-bold text-red-400">{todayOverallStats.overdue}</p>
+                                    <p className="text-xs text-zinc-500 mt-1">Vencidas</p>
+                                </div>
+                            </div>
+
+                            {/* Designer Cards Section for Today */}
+                            <div className="mb-8">
+                                <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+                                    <Award className="text-primary" size={20} />
+                                    Desempenho por Designer - Hoje
+                                </h2>
+
+                                {filteredTodayDesignerStats.length === 0 ? (
+                                    <div className="bg-zinc-900/50 border border-zinc-700/50 rounded-2xl p-12 text-center">
+                                        <CalendarCheck className="mx-auto text-zinc-600 mb-4" size={48} />
+                                        <p className="text-zinc-400">Nenhuma tarefa com prazo de entrega hoje</p>
+                                        <p className="text-zinc-500 text-sm mt-2">
+                                            Tarefas com status AGENDADO, POSTAR, AP, GERENTE ou CONCLUIDO e prazo para hoje aparecerão aqui
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                        {filteredTodayDesignerStats.map((designer) => (
+                                            <div
+                                                key={designer.id}
+                                                className="bg-gradient-to-br from-zinc-900 to-zinc-800/30 border border-zinc-700/50 rounded-2xl p-6 hover:border-primary/30 transition-all group"
+                                            >
+                                                {/* Header */}
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <div className="flex items-center gap-3">
+                                                        {designer.avatar_url ? (
+                                                            <img
+                                                                src={designer.avatar_url}
+                                                                alt={designer.name}
+                                                                className="h-12 w-12 rounded-full object-cover border-2 border-zinc-700 group-hover:border-primary/50 transition-colors"
+                                                            />
+                                                        ) : (
+                                                            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-zinc-700 flex items-center justify-center text-primary font-bold text-lg">
+                                                                {designer.name.charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <h3 className="font-semibold text-white text-lg">{designer.name}</h3>
+                                                            <p className="text-xs text-zinc-500">
+                                                                {designer.totalDeadlineThisPeriod} tarefas hoje
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Efficiency Badge */}
+                                                    <div className={`px-3 py-1.5 rounded-full ${getEfficiencyBg(designer.efficiency)} ${getEfficiencyColor(designer.efficiency)} text-sm font-bold`}>
+                                                        {designer.efficiency}% eficiência
+                                                    </div>
+                                                </div>
+
+                                                {/* Stats Grid */}
+                                                <div className="grid grid-cols-3 gap-3 mb-4">
+                                                    <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                                                        <p className="text-2xl font-bold text-emerald-400">{designer.completed}</p>
+                                                        <p className="text-xs text-zinc-500 mt-1">Concluídas</p>
+                                                    </div>
+                                                    <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                                                        <p className="text-2xl font-bold text-green-400">{designer.completedOnTime}</p>
+                                                        <p className="text-xs text-zinc-500 mt-1">No Prazo</p>
+                                                    </div>
+                                                    <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                                                        <p className="text-2xl font-bold text-amber-400">{designer.completedLate}</p>
+                                                        <p className="text-xs text-zinc-500 mt-1">Atrasadas</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Progress Bar */}
+                                                <div className="mb-4">
+                                                    <div className="flex justify-between text-xs text-zinc-500 mb-2">
+                                                        <span>Taxa de Sucesso</span>
+                                                        <span>{designer.completedOnTime}/{designer.completed}</span>
+                                                    </div>
+                                                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-gradient-to-r from-primary to-emerald-500 transition-all duration-500"
+                                                            style={{
+                                                                width: designer.completed > 0
+                                                                    ? `${(designer.completedOnTime / designer.completed) * 100}%`
+                                                                    : '0%'
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Avg Time */}
+                                                {designer.avgTimeMinutes > 0 && (
+                                                    <div className="pt-4 border-t border-zinc-700/50">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-xs text-zinc-500">Tempo médio por tarefa</span>
+                                                            <span className="text-sm font-medium text-primary">{formatTime(designer.avgTimeMinutes)}</span>
+                                                        </div>
                                                     </div>
                                                 )}
-                                                <div>
-                                                    <h3 className="font-semibold text-white text-lg">{designer.name}</h3>
-                                                    <p className="text-xs text-zinc-500">
-                                                        {designer.totalDeadlineThisPeriod} demandas no período
-                                                    </p>
-                                                </div>
                                             </div>
-
-                                            {/* Efficiency Badge */}
-                                            <div className={`px-3 py-1.5 rounded-full ${getEfficiencyBg(designer.efficiency)} ${getEfficiencyColor(designer.efficiency)} text-sm font-bold`}>
-                                                {designer.efficiency}% eficiência
-                                            </div>
-                                        </div>
-
-                                        {/* Stats Grid */}
-                                        <div className="grid grid-cols-3 gap-3 mb-4">
-                                            <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
-                                                <p className="text-2xl font-bold text-emerald-400">{designer.completed}</p>
-                                                <p className="text-xs text-zinc-500 mt-1">Concluídas</p>
-                                            </div>
-                                            <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
-                                                <p className="text-2xl font-bold text-blue-400">{designer.inProduction + designer.pending}</p>
-                                                <p className="text-xs text-zinc-500 mt-1">A Fazer</p>
-                                            </div>
-                                            <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
-                                                <p className="text-2xl font-bold text-red-400">{designer.overdue}</p>
-                                                <p className="text-xs text-zinc-500 mt-1">Atrasadas</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Progress Bar - Completed vs Pending */}
-                                        <div className="mb-4">
-                                            <div className="flex justify-between text-xs text-zinc-500 mb-2">
-                                                <span>Progresso</span>
-                                                <span>{designer.completed}/{designer.totalDeadlineThisPeriod}</span>
-                                            </div>
-                                            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-gradient-to-r from-primary to-emerald-500 transition-all duration-500"
-                                                    style={{
-                                                        width: designer.totalDeadlineThisPeriod > 0
-                                                            ? `${(designer.completed / designer.totalDeadlineThisPeriod) * 100}%`
-                                                            : '0%'
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Detail Stats */}
-                                        <div className="grid grid-cols-2 gap-3 pt-4 border-t border-zinc-700/50">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-2 w-2 rounded-full bg-green-400" />
-                                                <span className="text-xs text-zinc-400">No prazo: <span className="text-green-400 font-medium">{designer.completedOnTime}</span></span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-2 w-2 rounded-full bg-amber-400" />
-                                                <span className="text-xs text-zinc-400">Atrasada na entrega: <span className="text-amber-400 font-medium">{designer.completedLate}</span></span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-2 w-2 rounded-full bg-blue-400" />
-                                                <span className="text-xs text-zinc-400">Em produção: <span className="text-blue-400 font-medium">{designer.inProduction}</span></span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-2 w-2 rounded-full bg-purple-400" />
-                                                <span className="text-xs text-zinc-400">Pendente: <span className="text-purple-400 font-medium">{designer.pending}</span></span>
-                                            </div>
-                                        </div>
-
-                                        {/* Avg Time */}
-                                        {designer.avgTimeMinutes > 0 && (
-                                            <div className="mt-4 pt-4 border-t border-zinc-700/50">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-xs text-zinc-500">Tempo médio por demanda</span>
-                                                    <span className="text-sm font-medium text-primary">{formatTime(designer.avgTimeMinutes)}</span>
-                                                </div>
-                                            </div>
-                                        )}
+                                        ))}
                                     </div>
-                                ))}
+                                )}
                             </div>
-                        )}
-                    </div>
+                        </>
+                    )}
 
 
                 </div>

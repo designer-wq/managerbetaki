@@ -11,6 +11,15 @@ export function getSaoPauloDate(): Date {
 }
 
 /**
+ * Parse a date string or Date object to São Paulo timezone
+ * Use this when you need to convert an existing date to São Paulo time
+ */
+export function parseDateToSP(dateInput: string | Date): Date {
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    return new Date(date.toLocaleString('en-US', { timeZone: SAO_PAULO_TIMEZONE }));
+}
+
+/**
  * Format a date string to São Paulo timezone without timezone offset issues
  * Use this when creating date filters to avoid +1 day offset
  */
@@ -164,8 +173,148 @@ export function getTodaySP(): string {
     return `${year}-${month}-${day}`;
 }
 
+/**
+ * Get current timestamp in ISO format for São Paulo timezone
+ * Use this instead of new Date().toISOString() to ensure UTC-3 consistency
+ */
+export function getNowISO(): string {
+    const now = getSaoPauloDate();
+    // Convert to ISO string but adjust for São Paulo timezone
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+
+    // Return in ISO format with -03:00 timezone
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}-03:00`;
+}
+
+/**
+ * Convert a Date object to ISO string in São Paulo timezone
+ */
+export function toISOStringSP(date: Date): string {
+    // Convert to São Paulo timezone
+    const spDate = new Date(date.toLocaleString('en-US', { timeZone: SAO_PAULO_TIMEZONE }));
+    const year = spDate.getFullYear();
+    const month = String(spDate.getMonth() + 1).padStart(2, '0');
+    const day = String(spDate.getDate()).padStart(2, '0');
+    const hours = String(spDate.getHours()).padStart(2, '0');
+    const minutes = String(spDate.getMinutes()).padStart(2, '0');
+    const seconds = String(spDate.getSeconds()).padStart(2, '0');
+    const ms = String(spDate.getMilliseconds()).padStart(3, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}-03:00`;
+}
+
+/**
+ * Get date N days ago in São Paulo timezone
+ */
+export function getDaysAgoSP(days: number): Date {
+    const now = getSaoPauloDate();
+    now.setDate(now.getDate() - days);
+    return now;
+}
+
+/**
+ * Check if a date is overdue (past deadline in São Paulo timezone)
+ */
+export function isOverdueSP(deadline: string | Date | null | undefined): boolean {
+    if (!deadline) return false;
+
+    const deadlineDate = typeof deadline === 'string' ? parseDateSP(deadline) : deadline;
+    if (!deadlineDate) return false;
+
+    const now = getSaoPauloDate();
+    const deadlineEndOfDay = getEndOfDaySP(deadlineDate);
+
+    return now > deadlineEndOfDay;
+}
+
+/**
+ * Get the difference in days between two dates (São Paulo timezone)
+ */
+export function getDaysDifferenceSP(date1: Date | string, date2: Date | string): number {
+    const d1 = typeof date1 === 'string' ? parseDateSP(date1) : date1;
+    const d2 = typeof date2 === 'string' ? parseDateSP(date2) : date2;
+
+    if (!d1 || !d2) return 0;
+
+    const start = getStartOfDaySP(d1);
+    const end = getStartOfDaySP(d2);
+
+    const diffTime = end.getTime() - start.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Check if a status name indicates a "delivered" status
+ * Status entregues: Agendado, Postar, Ap.Gerente, Concluído, Entregue
+ */
+export function isDeliveredStatus(statusName: string | undefined | null): boolean {
+    if (!statusName) return false;
+    const s = statusName.toLowerCase().trim();
+    return s.includes('agendado') ||
+        s.includes('ag.odds') ||
+        s.includes('postar') ||
+        s.includes('ap.gerente') ||
+        s.includes('ap. gerente') ||
+        s.includes('gerente') ||
+        s.includes('conclu') ||
+        s.includes('entregue') ||
+        s.includes('finaliz');
+}
+
+/**
+ * Get the delivery date of a demand
+ * Para demandas entregues, usa APENAS finished_at (data que foi para Postar)
+ * Para demandas NÃO entregues, usa deadline (prazo)
+ * Retorna string no formato YYYY-MM-DD ou null
+ */
+export function getDeliveryDateStr(demand: {
+    statuses?: { name?: string };
+    finished_at?: string | null;
+    updated_at?: string;
+    deadline?: string;
+}): string | null {
+    const statusName = demand.statuses?.name || '';
+
+    // Para demandas com status de entrega: usa APENAS finished_at
+    // NÃO usa deadline como fallback - só mostra se realmente foi entregue
+    if (isDeliveredStatus(statusName)) {
+        if (demand.finished_at) {
+            return demand.finished_at.split('T')[0];
+        }
+        // Se não tem finished_at, retorna null (mostra "-")
+        return null;
+    }
+
+    // Para outras demandas (não entregues), usa deadline
+    if (demand.deadline) {
+        return demand.deadline.split('T')[0];
+    }
+
+    return null;
+}
+
+/**
+ * Check if a demand's delivery date matches a specific date string (YYYY-MM-DD)
+ */
+export function matchesDeliveryDate(demand: {
+    statuses?: { name?: string };
+    finished_at?: string | null;
+    updated_at?: string;
+    deadline?: string;
+}, targetDate: string): boolean {
+    const deliveryDate = getDeliveryDateStr(demand);
+    return deliveryDate === targetDate;
+}
+
 export default {
     getSaoPauloDate,
+    parseDateToSP,
     formatDateForFilter,
     getStartOfDaySP,
     getEndOfDaySP,
@@ -176,5 +325,13 @@ export default {
     isDateInRangeSP,
     formatDateDisplaySP,
     formatDateTimeSP,
-    getTodaySP
+    getTodaySP,
+    getNowISO,
+    toISOStringSP,
+    getDaysAgoSP,
+    isOverdueSP,
+    getDaysDifferenceSP,
+    isDeliveredStatus,
+    getDeliveryDateStr,
+    matchesDeliveryDate
 };
