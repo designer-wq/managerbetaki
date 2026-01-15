@@ -478,7 +478,9 @@ const DemandsPage = () => {
       if (activeTab === 'backlog') {
          matchesTab = statusName.includes('backlog');
       } else if (activeTab === 'approval') {
-         matchesTab = ['postar', 'ap', 'gerente', 'agendado'].some(k => statusName.includes(k));
+         matchesTab = ['postar', 'ap', 'gerente'].some(k => statusName.includes(k)) && !statusName.includes('agendado');
+      } else if (activeTab === 'scheduled') {
+         matchesTab = statusName.includes('agendado');
       } else if (activeTab === 'production') {
          matchesTab = statusName.includes('produção') || statusName.includes('producao');
       } else if (activeTab === 'stalled') {
@@ -543,7 +545,7 @@ const DemandsPage = () => {
          // Default Sort Logic based on Tab
 
          // User Request: "nas abas de aprovar e concluidos.. deve aparecer o mais recente criado [alterado]"
-         if (activeTab === 'approval' || activeTab === 'completed') {
+         if (activeTab === 'approval' || activeTab === 'scheduled' || activeTab === 'completed') {
             const dateA = a.updated_at ? parseDateToSP(a.updated_at).getTime() : (a.created_at ? parseDateToSP(a.created_at).getTime() : 0);
             const dateB = b.updated_at ? parseDateToSP(b.updated_at).getTime() : (b.created_at ? parseDateToSP(b.created_at).getTime() : 0);
             return dateB - dateA; // Most recent update first
@@ -790,7 +792,8 @@ const DemandsPage = () => {
                <div className="flex flex-wrap gap-2 mb-6 border-b border-zinc-700/50 pb-1">
                   {[
                      { id: 'backlog', label: 'BackLog' },
-                     { id: 'approval', label: 'Aprovar / Agendado' },
+                     { id: 'approval', label: 'Aprovar' },
+                     { id: 'scheduled', label: 'Agendado' },
                      { id: 'production', label: 'Em Produção' },
                      { id: 'stalled', label: 'Parado / Revisão' },
                      { id: 'completed', label: 'Concluídos' },
