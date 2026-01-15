@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#bcd200" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ManagerBet" />
+  <meta name="description" content="Sistema de Gerenciamento de Marketing - Bet Aki" />
+  <link rel="manifest" href="/managerbetaki/manifest.json" />
+  <link rel="apple-touch-icon" href="/managerbetaki/logo.png" />
+  <link rel="icon" type="image/png" href="/managerbetaki/logo.png" />
+  <title>Manger Mkt Bet Aki</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700&family=Spline+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#bcd200",
+            "primary-hover": "#a4b800",
+            "background-light": "#f6f8f7",
+            "background-dark": "#09090b", // kept as base
+            "surface-dark": "#18181b",
+            "card-dark": "rgba(255,255,255,0.02)", // Updated to requested reduced opacity
+            highlight: "#27272a",
+            "border-dark": "rgba(255,255,255,0.04)", // Updated to requested subtle border
+          },
+          fontFamily: {
+            display: ["Spline Sans", "sans-serif"],
+            body: ["Noto Sans", "sans-serif"],
+          },
+          borderRadius: {
+            none: "0",
+            xs: "6px",
+            sm: "8px",
+            DEFAULT: "10px", // md
+            md: "10px",
+            lg: "12px",
+            xl: "16px", // fallback just in case
+            full: "9999px",
+            pill: "999px",
+          },
+          boxShadow: {
+            'sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            'card': '0 1px 0 rgba(255,255,255,0.03), 0 6px 20px rgba(0,0,0,0.35)',
+            'card-hover': '0 1px 0 rgba(255,255,255,0.04), 0 10px 30px rgba(0,0,0,0.45)',
+          }
+        },
+      },
+    };
+  </script>
+  <style>
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #18181b;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #3f3f46;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #bcd200;
+    }
+
+    /* Global Card Standard */
+    .card-enterprise {
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 6px 20px rgba(0, 0, 0, 0.35);
+      transition: all 0.2s ease-in-out;
+    }
+
+    .card-enterprise:hover {
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.45);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* 1. Card Hierarchy */
+    .card-primary {
+      background: rgba(255, 255, 255, 0.035);
+      /* Slightly lighter */
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      /* Stronger border */
+    }
+
+    .card-secondary {
+      background: rgba(255, 255, 255, 0.02);
+      /* Standard */
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .card-neutral {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+      /* Very subtle */
+      box-shadow: none;
+    }
+
+    /* 2. Contrast Utilities */
+    .text-contrast-title {
+      opacity: 0.7;
+    }
+
+    .text-contrast-sub {
+      opacity: 0.55;
+    }
+
+    .text-contrast-value {
+      opacity: 1;
+    }
+
+    /* 3. Table Enhancements */
+    .table-zebra tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .table-hover tr:hover {
+      background: rgba(255, 255, 255, 0.035);
+      cursor: pointer;
+    }
+
+    .table-content-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #fff;
+    }
+
+    .table-content-id {
+      font-size: 0.75rem;
+      color: #71717a;
+      opacity: 0.7;
+    }
+
+    /* Inputs/Filters radius-xs */
+    input,
+    select,
+    textarea,
+    .filter-container {
+      border-radius: 6px !important;
+    }
+
+    /* Modals radius-lg */
+    .modal-content {
+      border-radius: 12px !important;
+    }
+
+    /* Mobile Sidebar Animation */
+    @keyframes slideInLeft {
+      from {
+        transform: translateX(-100%);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideOutLeft {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+
+      to {
+        transform: translateX(-100%);
+        opacity: 0;
+      }
+    }
+
+    .animate-slide-in-left {
+      animation: slideInLeft 0.25s ease-out forwards;
+    }
+
+    .animate-slide-out-left {
+      animation: slideOutLeft 0.2s ease-in forwards;
+    }
+
+    /* Responsive Table Wrapper */
+    .table-responsive {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Hide scrollbar on mobile navigation */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Mobile-first card adjustments */
+    @media (max-width: 768px) {
+      .card-enterprise {
+        padding: 1rem;
+      }
+
+      .custom-scrollbar {
+        -webkit-overflow-scrolling: touch;
+      }
+    }
+
+    /* Command Palette Animations */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes scaleIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.95);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .animate-fade-in {
+      animation: fadeIn 0.15s ease-out forwards;
+    }
+
+    .animate-scale-in {
+      animation: scaleIn 0.2s ease-out forwards;
+    }
+
+    /* Keyboard key styles */
+    kbd {
+      font-family: inherit;
+      font-size: 0.75rem;
+    }
+
+    /* Pulse subtle animation for alerts */
+    @keyframes pulse-subtle {
+
+      0%,
+      100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+      }
+
+      50% {
+        opacity: 0.95;
+        box-shadow: 0 0 20px 2px rgba(245, 158, 11, 0.15);
+      }
+    }
+
+    .animate-pulse-subtle {
+      animation: pulse-subtle 3s ease-in-out infinite;
+    }
+
+    /* Line clamp utility */
+    .line-clamp-1 {
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* ============================================
+       LIGHT MODE STYLES
+       ============================================ */
+
+    /* Light mode scrollbar */
+    .light ::-webkit-scrollbar-track {
+      background: #f4f4f5;
+    }
+
+    .light ::-webkit-scrollbar-thumb {
+      background: #d4d4d8;
+      border-radius: 4px;
+    }
+
+    .light ::-webkit-scrollbar-thumb:hover {
+      background: #a1a1aa;
+    }
+
+    /* Light mode cards */
+    .light .card-enterprise {
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .light .card-enterprise:hover {
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.08);
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    .light .card-primary {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    .light .card-secondary {
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    /* Light mode backgrounds */
+    .light .bg-zinc-950 {
+      background-color: #fafafa !important;
+    }
+
+    .light .bg-zinc-900 {
+      background-color: #ffffff !important;
+    }
+
+    .light .bg-zinc-800 {
+      background-color: #f4f4f5 !important;
+    }
+
+    .light .bg-zinc-700 {
+      background-color: #e4e4e7 !important;
+    }
+
+    /* Light mode text */
+    .light .text-white {
+      color: #18181b !important;
+    }
+
+    .light .text-zinc-100 {
+      color: #27272a !important;
+    }
+
+    .light .text-zinc-200 {
+      color: #3f3f46 !important;
+    }
+
+    .light .text-zinc-300 {
+      color: #52525b !important;
+    }
+
+    .light .text-zinc-400 {
+      color: #71717a !important;
+    }
+
+    .light .text-zinc-500 {
+      color: #a1a1aa !important;
+    }
+
+    /* Light mode borders */
+    .light .border-zinc-800 {
+      border-color: #e4e4e7 !important;
+    }
+
+    .light .border-zinc-700 {
+      border-color: #d4d4d8 !important;
+    }
+
+    .light .border-zinc-600 {
+      border-color: #a1a1aa !important;
+    }
+
+    /* Light mode inputs */
+    .light input,
+    .light select,
+    .light textarea {
+      background-color: #ffffff !important;
+      border-color: #d4d4d8 !important;
+      color: #18181b !important;
+    }
+
+    .light input::placeholder,
+    .light textarea::placeholder {
+      color: #a1a1aa !important;
+    }
+
+    .light input:focus,
+    .light select:focus,
+    .light textarea:focus {
+      border-color: #bcd200 !important;
+    }
+
+    /* Light mode sidebar */
+    .light .bg-zinc-950.w-72 {
+      background-color: #ffffff !important;
+      border-right: 1px solid #e4e4e7;
+    }
+
+    /* Light mode tables */
+    .light .table-zebra tr:nth-child(even) {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .light .table-hover tr:hover {
+      background: rgba(0, 0, 0, 0.04);
+    }
+
+    /* Light mode header */
+    .light .border-b.border-zinc-800 {
+      border-color: #e4e4e7 !important;
+    }
+
+    /* Light mode modal backdrop */
+    .light .bg-black/50 {
+      background-color: rgba(0, 0, 0, 0.3) !important;
+    }
+
+    /* Light mode hover states */
+    .light .hover:bg-zinc-800:hover {
+      background-color: #f4f4f5 !important;
+    }
+
+    .light .hover:bg-zinc-700:hover {
+      background-color: #e4e4e7 !important;
+    }
+
+    /* Transition for theme changes */
+    html.dark,
+    html.light {
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+  </style>
+
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1",
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/managerbetaki/assets/index-Nx_iv7y9.js"></script>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white font-display overflow-hidden">
+  <div id="root"></div>
+
+  <!-- Register Service Worker for PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((registration) => {
+            console.log('SW registered:', registration.scope);
+          })
+          .catch((error) => {
+            console.log('SW registration failed:', error);
+          });
+      });
+    }
+  </script>
+</body>
+
+</html>
